@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- "Haul" is a working name. Change it here, in the wordmark (ui/components/Wordmark.kt) and in app/build.gradle.kts. -->
+    <string name="app_name">Haul</string>
+    <string name="channel_downloads">Downloads</string>
+    <string name="channel_downloads_desc">Progress of downloads, with pause and cancel</string>
+    <string name="channel_finished">Finished downloads</string>
+    <string name="channel_updates">Updates</string>
+</resources>

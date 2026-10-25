@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Square-capped arrow onto a baseline, 64dp glyph centred in the 108dp adaptive canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,34v28M42,52l12,12 12,-12M36,74h36"
+        android:strokeWidth="6"
+        android:strokeColor="#1A0E06"
+        android:strokeLineCap="square" />
+</vector>

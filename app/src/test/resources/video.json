@@ -1,0 +1,21 @@
+{
+  "id": "abc123",
+  "title": "Sourdough from scratch, the full process",
+  "uploader": "Kitchen Notes",
+  "extractor_key": "Vimeo",
+  "webpage_url": "https://vimeo.com/827140226",
+  "duration": 2487,
+  "thumbnail": "https://i.example.com/t.jpg",
+  "formats": [
+    {"format_id": "sb0", "ext": "mhtml", "protocol": "mhtml", "vcodec": "none", "acodec": "none"},
+    {"format_id": "139", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.5", "abr": 48.0, "tbr": 48.0, "filesize": 10000000},
+    {"format_id": "140", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 129.5, "tbr": 129.5, "filesize": 26000000},
+    {"format_id": "251", "ext": "webm", "vcodec": "none", "acodec": "opus", "abr": 160.0, "tbr": 160.0, "filesize": 48000000},
+    {"format_id": "18", "ext": "mp4", "vcodec": "avc1.42001E", "acodec": "mp4a.40.2", "height": 360, "width": 640, "fps": 30, "tbr": 206.0, "filesize": 64000000},
+    {"format_id": "136", "ext": "mp4", "vcodec": "avc1.4d401f", "acodec": "none", "height": 720, "width": 1280, "fps": 30, "tbr": 600.0, "filesize": 198000000},
+    {"format_id": "247", "ext": "webm", "vcodec": "vp9", "acodec": "none", "height": 720, "width": 1280, "fps": 30, "tbr": 500.0, "filesize": 150000000},
+    {"format_id": "137", "ext": "mp4", "vcodec": "avc1.640028", "acodec": "none", "height": 1080, "width": 1920, "fps": 30, "tbr": 1300.0, "filesize": 412000000},
+    {"format_id": "248", "ext": "webm", "vcodec": "vp9", "acodec": "none", "height": 1080, "width": 1920, "fps": 30, "tbr": 1000.0, "filesize": 301000000},
+    {"format_id": "313", "ext": "webm", "vcodec": "vp9", "acodec": "none", "height": 2160, "width": 3840, "fps": 30, "tbr": 6000.0, "filesize_approx": 1860000000}
+  ]
+}

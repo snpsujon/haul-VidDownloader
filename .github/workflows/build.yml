@@ -1,0 +1,124 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Your website, without a trailing slash. Set it under Settings → Secrets and variables →
+  # Actions → Variables. Until it is set, update checks stay off in the built app.
+  HAUL_SITE: ${{ vars.HAUL_SITE || 'https://example.com' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Bundle the latest yt-dlp
+        # The app ships a fresh yt-dlp in every build; it updates itself on the phone after that.
+        # An app resource named "ytdlp" replaces the one inside youtubedl-android.
+        run: |
+          mkdir -p app/src/main/res/raw
+          curl -fsSL --retry 4 -o app/src/main/res/raw/ytdlp \
+            https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+          curl -fsSL --retry 4 https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest \
+            | python3 -c "import json,sys; print('yt-dlp', json.load(sys.stdin)['tag_name'])"
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            name="${GITHUB_REF#refs/tags/v}"
+            IFS=. read -r major minor patch <<< "${name%%-*}"
+            code=$(( ${major:-0} * 10000 + ${minor:-0} * 100 + ${patch:-0} ))
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            name="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+            code=1
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Version $name ($code)"
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Debug build
+        if: steps.version.outputs.release != 'true'
+        run: ./gradlew --no-daemon assembleDebug -PappSite="$HAUL_SITE"
+
+      - name: Signed release build
+        if: steps.version.outputs.release == 'true'
+        env:
+          HAUL_KEYSTORE_BASE64: ${{ secrets.HAUL_KEYSTORE_BASE64 }}
+          HAUL_KEYSTORE_PASSWORD: ${{ secrets.HAUL_KEYSTORE_PASSWORD }}
+          HAUL_KEY_ALIAS: ${{ secrets.HAUL_KEY_ALIAS }}
+          HAUL_KEY_PASSWORD: ${{ secrets.HAUL_KEY_PASSWORD }}
+        run: |
+          if [ -z "$HAUL_KEYSTORE_BASE64" ]; then
+            echo "::error::The HAUL_KEYSTORE_BASE64 secret is missing. See README, Signing."
+            exit 1
+          fi
+          export HAUL_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          echo "$HAUL_KEYSTORE_BASE64" | base64 -d > "$HAUL_KEYSTORE_PATH"
+          ./gradlew --no-daemon assembleRelease \
+            -PappSite="$HAUL_SITE" \
+            -PversionName="${{ steps.version.outputs.name }}" \
+            -PversionCode="${{ steps.version.outputs.code }}"
+          rm -f "$HAUL_KEYSTORE_PATH"
+
+      - name: Package for the website
+        if: steps.version.outputs.release == 'true'
+        env:
+          MIN_SUPPORTED: ${{ vars.HAUL_MIN_SUPPORTED || '0' }}
+        run: |
+          python3 scripts/package_release.py \
+            --apks app/build/outputs/apk/release \
+            --out dist \
+            --site "$HAUL_SITE" \
+            --version-name "${{ steps.version.outputs.name }}" \
+            --version-code "${{ steps.version.outputs.code }}" \
+            --min-supported "$MIN_SUPPORTED" \
+            --changelog "changelog/${{ steps.version.outputs.name }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.release != 'true'
+        with:
+          name: haul-debug-${{ steps.version.outputs.name }}
+          path: app/build/outputs/apk/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.release == 'true'
+        with:
+          name: haul-${{ steps.version.outputs.name }}-website
+          path: dist/
+
+      - name: Draft a GitHub release
+        if: steps.version.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/app/*.apk
+            dist/app/version.json
+            dist/haul-website-upload.zip

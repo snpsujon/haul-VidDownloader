@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="haul_signal">#FF7A3D</color>
+    <color name="haul_ground">#141311</color>
+    <color name="haul_ground_light">#F4F1EA</color>
+</resources>

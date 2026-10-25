@@ -1,0 +1,12 @@
+{
+  "_type": "playlist",
+  "title": "Morning field recordings",
+  "uploader": "Field Tapes",
+  "extractor_key": "YoutubeTab",
+  "webpage_url": "https://www.youtube.com/playlist?list=PL1",
+  "entries": [
+    {"_type": "url", "ie_key": "Youtube", "url": "https://www.youtube.com/watch?v=aaa", "title": "Morning birdsong", "duration": 1338},
+    {"_type": "url", "ie_key": "Youtube", "url": "bbb", "title": "Dawn chorus", "duration": 1085.4,
+     "thumbnails": [{"url": "https://i.example.com/s.jpg", "width": 120}, {"url": "https://i.example.com/l.jpg", "width": 640}]}
+  ]
+}

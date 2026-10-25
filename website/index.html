@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haul for Android</title>
+<meta name="description" content="Save video and audio from links to your Android phone. Open source, powered by yt-dlp.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --ground:#141311;--s1:#1C1B18;--s2:#252420;--line:#3A3832;--divider:#2A2925;
+  --hi:#F3EFE6;--mid:#B5AFA2;--low:#9A9488;--signal:#FF7A3D;--on-signal:#1A0E06;--ok:#A9D68C;
+}
+@media (prefers-color-scheme: light){
+  :root{--ground:#F4F1EA;--s1:#FFFFFF;--s2:#EAE6DC;--line:#D6D0C3;--divider:#E2DDD2;
+    --hi:#1A1915;--mid:#57534A;--low:#6E695E;--signal:#C2440F;--on-signal:#FFFFFF;--ok:#3F7A22}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--hi);font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:var(--signal)}
+.wrap{max-width:720px;margin:0 auto;padding:40px 20px 64px}
+.mark{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;letter-spacing:-.045em;line-height:.9}
+.mark span{color:var(--signal)}
+.label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--low);text-transform:uppercase}
+.ticks{display:flex;gap:2px;height:28px;align-items:flex-end;margin:20px 0}
+.ticks i{flex:1;border-radius:1px;background:var(--line)}
+.ticks i.on{background:var(--signal)}
+h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:clamp(34px,6vw,48px);line-height:1.08;letter-spacing:-.02em;margin:40px 0 14px}
+p.lead{font-size:17px;line-height:26px;color:var(--mid);margin:0 0 28px;max-width:560px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;height:56px;padding:0 24px;border-radius:12px;background:var(--signal);color:var(--on-signal);font-weight:600;font-size:16px;text-decoration:none}
+.btn svg{width:22px;height:22px}
+.meta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low);margin-top:12px}
+.card{background:var(--s1);border:1px solid var(--divider);border-radius:12px;padding:20px;margin-top:20px}
+.card h2{margin:0 0 12px}
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s}
+ol.steps li{display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--divider);font-size:15px;line-height:22px}
+ol.steps li:first-child{border-top:0}
+ol.steps li::before{counter-increment:s;content:counter(s,decimal-leading-zero);font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--signal);width:24px;flex:none;padding-top:2px}
+.fp{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:20px;color:var(--mid);word-break:break-all;margin:6px 0 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td{padding:10px 0;border-top:1px solid var(--divider);vertical-align:top}
+td:last-child{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mid)}
+td a{font-weight:600}
+.hash{display:block;font-size:11px;color:var(--low);word-break:break-all;margin-top:4px;text-align:left}
+footer{margin-top:40px;font-size:13px;line-height:20px;color:var(--low)}
+footer a{color:var(--mid)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="label">Android · open source · GPL-3.0</div>
+  <div class="mark" style="font-size:72px;margin-top:20px">haul<span>.</span></div>
+  <div class="ticks" aria-hidden="true" id="ticks"></div>
+  <div style="display:flex;justify-content:space-between" class="label"><span>Video</span><span>Audio</span><span>1,000+ sites</span></div>
+
+  <h1>Save video and audio to your phone.</h1>
+  <p class="lead">Paste or share a link, pick the quality, and keep it offline. Everything runs on your phone. No account, no ads, no tracking.</p>
+
+  <a class="btn" id="download" href="app/">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+    <span id="download-label">Download for Android</span>
+  </a>
+  <div class="meta" id="download-meta">Android 7.0 or newer</div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:8px">Install</div>
+    <ol class="steps">
+      <li>Tap the download button and open the file when it finishes.</li>
+      <li>Android asks to allow installs from your browser. Turn on <b>Allow from this source</b>, then go back.</li>
+      <li>Tap <b>Install</b>. Haul checks for updates itself from now on.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="label">Signing certificate · SHA-256</div>
+    <p class="fp">[YOUR CERTIFICATE FINGERPRINT]</p>
+    <p style="font-size:13px;line-height:19px;color:var(--low);margin:8px 0 0">Haul shows the same fingerprint under Settings → About. If they match, your copy is genuine.</p>
+  </div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:4px">All files</div>
+    <table id="files"><tr><td>Loading…</td><td></td></tr></table>
+  </div>
+
+  <footer>
+    This app is for downloading content you own, content in the public domain, or content you have permission to save.
+    You are responsible for respecting copyright and each site's terms. Haul is not affiliated with any of the sites it can download from.
+    <br><br>
+    <a href="privacy.html">Privacy</a> · <a href="[SOURCE CODE URL]">Source code</a> · Copyright and takedown: <a href="mailto:[TAKEDOWN EMAIL]">[TAKEDOWN EMAIL]</a>
+  </footer>
+</div>
+<script>
+(function () {
+  var t = document.getElementById('ticks');
+  for (var i = 0; i < 48; i++) {
+    var e = document.createElement('i');
+    e.style.height = (8 + Math.round(20 * Math.abs(Math.sin(i * 0.55) * Math.cos(i * 0.17)))) + 'px';
+    if (i < 29) e.className = 'on';
+    t.appendChild(e);
+  }
+  var names = { 'arm64-v8a': 'Most phones (64-bit ARM)', 'armeabi-v7a': 'Older phones (32-bit ARM)', 'x86_64': 'Emulators and Chromebooks', 'universal': 'Works everywhere, larger' };
+  function mb(n) { return n ? Math.round(n / 1e6) + ' MB' : ''; }
+  fetch('app/version.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (v) {
+    // Browsers don't say which CPU a phone has, so the main button gets the file that installs
+    // everywhere. The smaller per-CPU files are listed below.
+    var best = v.apks.universal;
+    document.getElementById('download').href = best.url;
+    document.getElementById('download-label').textContent = 'Download Haul ' + v.versionName;
+    document.getElementById('download-meta').textContent = mb(best.size) + ' · Android 7.0 or newer';
+    var rows = '';
+    Object.keys(names).forEach(function (abi) {
+      var a = v.apks[abi]; if (!a) return;
+      rows += '<tr><td><a href="' + a.url + '">' + names[abi] + '</a><span class="hash">' + a.sha256 + '</span></td><td>' + abi.toUpperCase() + '<br>' + mb(a.size) + '</td></tr>';
+    });
+    document.getElementById('files').innerHTML = rows;
+  }).catch(function () {
+    document.getElementById('files').innerHTML = '<tr><td>Upload app/version.json to show the files here.</td><td></td></tr>';
+  });
+})();
+</script>
+</body>
+</html>
