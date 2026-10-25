@@ -152,7 +152,7 @@ class DownloadQueue(
             dao.releaseWaiting()
             val slots = s.concurrent - running.size
             if (slots > 0) {
-                dao.queued().filter { it.id !in running }.take(slots).forEach { launchJob(it) }
+                dao.queued().filter { !running.containsKey(it.id) }.take(slots).forEach { launchJob(it) }
             }
         }
         val pending = dao.pending()

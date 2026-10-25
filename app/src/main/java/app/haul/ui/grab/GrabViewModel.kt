@@ -103,7 +103,10 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
             phase = Phase.Offline(url)
             return
         }
-        g.infoCache[url]?.let { onInfo(it, onPlaylist); return }
+        g.infoCache[url]?.let {
+            viewModelScope.launch { onInfo(it, onPlaylist) }
+            return
+        }
         cancelFetch()
         val pid = "fetch-${++fetchCounter}"
         val short = Pretty.shortUrl(url)
