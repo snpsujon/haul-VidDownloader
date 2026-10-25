@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -98,7 +99,7 @@ fun HaulSheet(
 }
 
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectTapGesturesNoop() {
-    androidx.compose.foundation.gestures.detectTapGestures { }
+    detectTapGestures { }
 }
 
 /** Small centred dialog on surface-3 (confirmations, rename). */
