@@ -65,6 +65,10 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // With the release key present, debug builds use it too, so a debug build from any
+            // machine that has the key installs over another. Without it, the SDK's debug key.
+            val release = signingConfigs.getByName("release")
+            if (release.storeFile != null) signingConfig = release
         }
     }
 

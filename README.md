@@ -67,6 +67,8 @@ keyAlias=haul
 keyPassword=...
 ```
 
+When `keystore.properties` is present, debug builds are signed with the release key as well, so a debug build made on one machine installs over one made on another. Without it they fall back to the SDK's per-machine debug key.
+
 On GitHub, add these under **Settings → Secrets and variables → Actions**:
 
 - Secrets: `HAUL_KEYSTORE_BASE64` (output of `base64 -w0 haul-release.jks`), `HAUL_KEYSTORE_PASSWORD`, `HAUL_KEY_ALIAS`, `HAUL_KEY_PASSWORD`
