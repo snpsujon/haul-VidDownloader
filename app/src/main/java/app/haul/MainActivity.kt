@@ -61,6 +61,8 @@ import app.haul.ui.onboarding.PermissionsScreen
 import app.haul.ui.queue.QueueScreen
 import app.haul.ui.queue.QueueViewModel
 import app.haul.ui.settings.AboutScreen
+import app.haul.ui.settings.CrashNotice
+import app.haul.ui.settings.CrashReportsScreen
 import app.haul.ui.settings.EngineScreen
 import app.haul.ui.settings.LicencesScreen
 import app.haul.ui.settings.SettingsScreen
@@ -69,6 +71,7 @@ import app.haul.ui.theme.Haul
 import app.haul.ui.theme.HaulTheme
 import app.haul.ui.update.InstallScreen
 import app.haul.ui.update.UpdatePromptSheet
+import app.haul.util.CrashReports
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -119,6 +122,7 @@ private object Routes {
     const val ENGINE = "engine"
     const val ABOUT = "about"
     const val LICENCES = "licences"
+    const val CRASHES = "crashes"
     const val INSTALL = "install"
 }
 
@@ -191,6 +195,9 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
         }
     }
 
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var crash by remember { mutableStateOf(if (s.onboarded) CrashReports.unseen(ctx) else null) }
+
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) settingsVm.setFolder(uri)
     }
@@ -220,6 +227,13 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
                 BackHandler(tab != Tab.Grab) { tab = Tab.Grab }
                 val queueSections by queue.sections.collectAsState()
                 Column(Modifier.fillMaxSize()) {
+                    crash?.let { f ->
+                        CrashNotice(
+                            f, snack,
+                            onDismiss = { CrashReports.markSeen(ctx); crash = null },
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
+                        )
+                    }
                     Box(Modifier.weight(1f)) {
                         when (tab) {
                             Tab.Grab -> GrabScreen(
@@ -281,7 +295,15 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
                 )
             }
             composable(Routes.ENGINE) { EngineScreen(settingsVm, snack, onBack = { nav.popBackStack() }) }
-            composable(Routes.ABOUT) { AboutScreen(settingsVm, onBack = { nav.popBackStack() }, onLicences = { nav.navigate(Routes.LICENCES) }) }
+            composable(Routes.ABOUT) {
+                AboutScreen(
+                    settingsVm,
+                    onBack = { nav.popBackStack() },
+                    onLicences = { nav.navigate(Routes.LICENCES) },
+                    onCrashReports = { nav.navigate(Routes.CRASHES) },
+                )
+            }
+            composable(Routes.CRASHES) { CrashReportsScreen(snack, onBack = { nav.popBackStack() }) }
             composable(Routes.LICENCES) { LicencesScreen(onBack = { nav.popBackStack() }) }
             composable(Routes.INSTALL) {
                 val i = available

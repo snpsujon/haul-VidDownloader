@@ -43,10 +43,11 @@ import app.haul.ui.components.sans
 import app.haul.ui.theme.HIcon
 import app.haul.ui.theme.Haul
 import app.haul.ui.theme.HaulIcon
+import app.haul.util.CrashReports
 
 /** Screen 23. */
 @Composable
-fun AboutScreen(vm: SettingsViewModel, onBack: () -> Unit, onLicences: () -> Unit) {
+fun AboutScreen(vm: SettingsViewModel, onBack: () -> Unit, onLicences: () -> Unit, onCrashReports: () -> Unit) {
     val c = Haul.colors
     val ctx = LocalContext.current
     Column(Modifier.fillMaxSize()) {
@@ -77,6 +78,8 @@ fun AboutScreen(vm: SettingsViewModel, onBack: () -> Unit, onLicences: () -> Uni
                 LinkRow("Copyright and takedown contact", null, HaulIcon.ChevRight) {
                     ctx.openUrl("mailto:${BuildConfig.TAKEDOWN_EMAIL}?subject=" + Uri.encode("Copyright or takedown request"))
                 }
+                val crashes = remember { CrashReports.reports(ctx).size }
+                LinkRow("Crash reports", if (crashes > 0) "$crashes SAVED" else "NONE", HaulIcon.ChevRight, onClick = onCrashReports)
             }
             Column(Modifier.padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 T("SIGNING CERTIFICATE · SHA-256", mono(11.sp, tracking = 0.08f), c.textLow)

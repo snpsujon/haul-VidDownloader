@@ -12,6 +12,7 @@ import app.haul.engine.MediaInfo
 import app.haul.engine.YtDlp
 import app.haul.update.AppUpdater
 import app.haul.update.Schedules
+import app.haul.util.CrashReports
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,10 +42,12 @@ class HaulApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReports.install(this)
         graph = AppGraph(this)
         Notifications.createChannels(this)
         graph.scope.launch {
             if (graph.engine.ensureReady()) {
+                CrashReports.engineVersion = graph.engine.version()
                 // Remember which yt-dlp shipped in this APK, for "Restore bundled version".
                 val s = graph.settings.current()
                 if (s.ytdlpBundledVersion == null && graph.engine.updatedVersion() == null) {
