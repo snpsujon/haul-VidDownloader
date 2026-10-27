@@ -17,7 +17,7 @@ concurrency:
 env:
   # Your website, without a trailing slash. Set it under Settings → Secrets and variables →
   # Actions → Variables. Until it is set, update checks stay off in the built app.
-  HAUL_SITE: ${{ vars.HAUL_SITE || 'https://example.com' }}
+  HAUL_SITE: ${{ vars.HAUL_SITE || 'https://stackforge-pro.xyz' }}
 
 jobs:
   build:

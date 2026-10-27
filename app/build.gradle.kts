@@ -16,9 +16,9 @@ val keystoreProps = Properties().apply {
 fun signingValue(key: String, env: String): String? =
     keystoreProps.getProperty(key) ?: System.getenv(env)
 
-// Placeholders until the final name and website are chosen. Change them here, or pass
+// The website for update checks and links. Change it here, or pass
 // -PappSite=https://your.site (CI reads the HAUL_SITE repository variable).
-val appSite = (findProperty("appSite") as String?)?.trimEnd('/') ?: "https://example.com"
+val appSite = (findProperty("appSite") as String?)?.trimEnd('/') ?: "https://stackforge-pro.xyz"
 
 android {
     namespace = "app.haul"
@@ -37,7 +37,7 @@ android {
         buildConfigField("String", "WEBSITE_URL", "\"$appSite\"")
         buildConfigField("String", "SOURCE_URL", "\"$appSite/source\"")
         buildConfigField("String", "PRIVACY_URL", "\"$appSite/privacy\"")
-        buildConfigField("String", "TAKEDOWN_EMAIL", "\"takedown@example.com\"")
+        buildConfigField("String", "TAKEDOWN_EMAIL", "\"takedown@stackforge-pro.xyz\"")
         buildConfigField("String", "YOUTUBEDL_ANDROID_VERSION", "\"${libs.versions.youtubedl.get()}\"")
     }
 

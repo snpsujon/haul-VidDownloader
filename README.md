@@ -30,7 +30,7 @@ App code, by area (`app/src/main/java/app/haul/`):
 
 | Where | What |
 | --- | --- |
-| `app/build.gradle.kts` → `appSite` (or the `HAUL_SITE` repo variable) | Your website. Update checks stay off while it is `example.com`. |
+| `app/build.gradle.kts` → `appSite` (or the `HAUL_SITE` repo variable) | Your website, `https://stackforge-pro.xyz` by default. Update checks stay off while it is set to `example.com`. |
 | `app/build.gradle.kts` → `applicationId` | The package name. **It can never change after the first public release.** |
 | `app/build.gradle.kts` → `TAKEDOWN_EMAIL` | Copyright and takedown contact |
 | `app/src/main/res/values/strings.xml` → `app_name` | The app's name |
@@ -72,7 +72,7 @@ When `keystore.properties` is present, debug builds are signed with the release 
 On GitHub, add these under **Settings → Secrets and variables → Actions**:
 
 - Secrets: `HAUL_KEYSTORE_BASE64` (output of `base64 -w0 haul-release.jks`), `HAUL_KEYSTORE_PASSWORD`, `HAUL_KEY_ALIAS`, `HAUL_KEY_PASSWORD`
-- Variables: `HAUL_SITE` (for example `https://haul.example.org`), optionally `HAUL_MIN_SUPPORTED`
+- Variables: `HAUL_SITE` (for example `https://stackforge-pro.xyz`), optionally `HAUL_MIN_SUPPORTED`
 
 ## Releasing
 
