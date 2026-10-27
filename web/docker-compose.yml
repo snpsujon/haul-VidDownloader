@@ -2,7 +2,7 @@ services:
   haul:
     build: .
     ports:
-      - "6456:6456"
+      - "6456:8000"
     environment:
       HAUL_UPDATE_ON_START: "1"
       HAUL_ADMIN_PASSWORD: "Asdf019lkjh"     # pick your own; the admin page stays off until you do
