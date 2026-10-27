@@ -127,6 +127,7 @@ val LICENCES = listOf(
     Licence("youtubedl-android", "GPL-3.0", "https://github.com/yausername/youtubedl-android/blob/master/LICENSE"),
     Licence("Python", "PSF License", "https://docs.python.org/3/license.html"),
     Licence("aria2", "GPL-2.0", "https://github.com/aria2/aria2/blob/master/COPYING"),
+    Licence("QuickJS (quickjs-ng)", "MIT", "https://github.com/quickjs-ng/quickjs/blob/master/LICENSE"),
     Licence("AndroidX, Jetpack Compose, Media3", "Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0"),
     Licence("Coil", "Apache-2.0", "https://github.com/coil-kt/coil/blob/main/LICENSE.txt"),
     Licence("Kotlin and kotlinx.coroutines", "Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0"),

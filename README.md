@@ -92,6 +92,10 @@ the copy inside youtubedl-android. On the phone, yt-dlp then updates itself from
 Nightly, at most once a day on Wi-Fi, or from Settings → Download engine). "Restore bundled version"
 goes back to the copy in the APK.
 
+YouTube needs a JavaScript runtime to solve its challenges. The APK carries QuickJS (quickjs-ng 0.17.0)
+as `app/src/main/jniLibs/<abi>/libqjs.so`, and the app passes it to yt-dlp with `--js-runtimes quickjs:…`.
+To rebuild it, unpack the quickjs-ng release source and run `scripts/build-quickjs.ps1`.
+
 ## Fonts
 
 Bricolage Grotesque, Instrument Sans and JetBrains Mono, under the SIL Open Font License (texts in
@@ -109,7 +113,6 @@ The same for Instrument Sans (400, 500, 600) and JetBrains Mono (500, 600).
 
 ## Known limits
 
-- yt-dlp needs a JavaScript runtime for some YouTube formats, and youtubedl-android doesn't ship one yet. Those formats may be missing until it does.
 - The audio player's waveform is a fixed pattern per file used as a seek bar, not the decoded audio.
 - Video plays only while its screen is open; audio keeps playing with the screen off.
 

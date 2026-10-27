@@ -84,6 +84,7 @@ class YtDlp(private val context: Context, private val accounts: Accounts) {
             .addOption("--flat-playlist")
             .addOption("--no-warnings")
             .addOption("--socket-timeout", 20)
+        addJsRuntime(req)
         val cookies = accounts.cookieFileFor(url, processId)?.also { req.addOption("--cookies", it.absolutePath) }
         try {
             val res = YoutubeDL.execute(req, processId, false, null)
@@ -128,6 +129,7 @@ class YtDlp(private val context: Context, private val accounts: Accounts) {
         req.addOption("-o", "%(title).150B [%(id)s].%(ext)s")
         req.addOption("-f", item.formatSelector)
         req.addOption("--embed-metadata")
+        addJsRuntime(req)
 
         when (item.mediaType) {
             MediaType.VIDEO -> {
@@ -256,6 +258,12 @@ class YtDlp(private val context: Context, private val accounts: Accounts) {
         return dir.listFiles()
             ?.filter { it.isFile && it.extension.lowercase() !in skip && !it.name.contains(".part") && !it.name.contains(".temp.") }
             ?.maxByOrNull { it.length() }
+    }
+
+    /** QuickJS, built from quickjs-ng into the APK, lets yt-dlp solve YouTube's JavaScript challenges. */
+    private fun addJsRuntime(req: YoutubeDLRequest) {
+        val qjs = File(context.applicationInfo.nativeLibraryDir, "libqjs.so")
+        if (qjs.exists()) req.addOption("--js-runtimes", "quickjs:${qjs.absolutePath}")
     }
 
     private fun escapeReplacement(s: String): String = s.replace("\\", "\\\\")
