@@ -15,11 +15,13 @@ import app.haul.data.AudioFormat
 import app.haul.data.Channel
 import app.haul.data.AppSettings.Companion.DEFAULT_FOLDER_LABEL
 import app.haul.data.ShareAction
+import app.haul.data.Site
 import app.haul.data.SubtitleMode
 import app.haul.data.Storage
 import app.haul.data.ThemeMode
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
@@ -105,6 +107,17 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setConcurrent(n: Int) = viewModelScope.launch { repo.setConcurrent(n); g.queue.pump() }
     fun setMobileData(on: Boolean) = viewModelScope.launch { repo.setMobileData(on); g.queue.pump() }
     fun setAria2c(on: Boolean) = viewModelScope.launch { repo.setAria2c(on) }
+
+    // Accounts -----------------------------------------------------------------------------------
+
+    val signedIn: StateFlow<List<Site>> = repo.settings.map { s -> s.signedInSites.mapNotNull { Site.byId(it) } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The site whose sign-in page is open. */
+    var signingIn by mutableStateOf<Site?>(null)
+
+    fun finishSignIn(site: Site, onResult: (Boolean) -> Unit) = viewModelScope.launch { onResult(g.accounts.finishSignIn(site)) }
+    fun signOut(site: Site) = viewModelScope.launch { g.accounts.signOut(site) }
 
     // Appearance and updates ---------------------------------------------------------------------
 

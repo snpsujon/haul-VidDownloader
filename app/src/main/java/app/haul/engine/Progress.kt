@@ -166,7 +166,7 @@ object Errors {
             )
             ErrorKind.PRIVATE -> Card(
                 "This video isn't public.",
-                "Only content you can open without signing in can be saved.",
+                "If your account can open it, sign in under Settings → Accounts, then retry.",
                 false,
             )
             ErrorKind.UNKNOWN -> Card(

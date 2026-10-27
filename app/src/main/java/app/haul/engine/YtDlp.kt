@@ -2,6 +2,7 @@ package app.haul.engine
 
 import android.content.Context
 import android.util.Log
+import app.haul.data.Accounts
 import app.haul.data.Channel
 import app.haul.data.DownloadEntity
 import app.haul.data.MediaType
@@ -28,7 +29,7 @@ data class DownloadResult(val file: File, val log: String, val extras: List<File
  * The on-device download engine: yt-dlp running on the bundled Python, with FFmpeg and aria2c.
  * Wraps youtubedl-android so the rest of the app never touches it directly.
  */
-class YtDlp(private val context: Context) {
+class YtDlp(private val context: Context, private val accounts: Accounts) {
 
     sealed interface State {
         data object Starting : State
@@ -83,6 +84,7 @@ class YtDlp(private val context: Context) {
             .addOption("--flat-playlist")
             .addOption("--no-warnings")
             .addOption("--socket-timeout", 20)
+        val cookies = accounts.cookieFileFor(url, processId)?.also { req.addOption("--cookies", it.absolutePath) }
         try {
             val res = YoutubeDL.execute(req, processId, false, null)
             MediaInfo.parse(res.out, url)
@@ -92,6 +94,8 @@ class YtDlp(private val context: Context) {
             throw EngineException("Could not read what the site sent back.", e.message ?: "")
         } catch (e: Exception) {
             throw EngineException(e.message ?: "Failed", e.message ?: "")
+        } finally {
+            cookies?.delete()
         }
     }
 
@@ -163,6 +167,8 @@ class YtDlp(private val context: Context) {
             req.addOption("-N", 4)
         }
 
+        val cookies = accounts.cookieFileFor(item.url, processId)?.also { req.addOption("--cookies", it.absolutePath) }
+
         val parser = ProgressParser(item.estimatedBytes)
         val log = StringBuilder()
         var lastEmit = 0L
@@ -189,6 +195,8 @@ class YtDlp(private val context: Context) {
         } catch (e: Exception) {
             val msg = e.message ?: "Failed"
             throw EngineException(msg, (log.toString() + "\n" + msg).trim())
+        } finally {
+            cookies?.delete()
         }
     }
 

@@ -2,6 +2,7 @@ package app.haul
 
 import android.app.Application
 import android.content.Context
+import app.haul.data.Accounts
 import app.haul.data.HaulDatabase
 import app.haul.data.SettingsRepository
 import app.haul.data.Storage
@@ -26,7 +27,8 @@ class AppGraph(context: Context) {
     val db = HaulDatabase.create(app)
     val dao = db.downloads()
     val settings = SettingsRepository(app)
-    val engine = YtDlp(app)
+    val accounts = Accounts(app, settings)
+    val engine = YtDlp(app, accounts)
     val storage = Storage(app)
     val network = NetworkMonitor(app)
     val queue = DownloadQueue(app, dao, settings, engine, storage, network, scope)

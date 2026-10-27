@@ -61,6 +61,8 @@ import app.haul.ui.onboarding.PermissionsScreen
 import app.haul.ui.queue.QueueScreen
 import app.haul.ui.queue.QueueViewModel
 import app.haul.ui.settings.AboutScreen
+import app.haul.ui.settings.AccountsScreen
+import app.haul.ui.settings.SignInScreen
 import app.haul.ui.settings.CrashNotice
 import app.haul.ui.settings.CrashReportsScreen
 import app.haul.ui.settings.EngineScreen
@@ -123,6 +125,8 @@ private object Routes {
     const val ABOUT = "about"
     const val LICENCES = "licences"
     const val CRASHES = "crashes"
+    const val ACCOUNTS = "accounts"
+    const val SIGN_IN = "sign-in"
     const val INSTALL = "install"
 }
 
@@ -291,7 +295,28 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
                     settingsVm, snack,
                     onBack = { nav.popBackStack() },
                     onEngine = { nav.navigate(Routes.ENGINE) },
+                    onAccounts = { nav.navigate(Routes.ACCOUNTS) },
                     onAbout = { nav.navigate(Routes.ABOUT) },
+                )
+            }
+            composable(Routes.ACCOUNTS) {
+                AccountsScreen(settingsVm, snack, onBack = { nav.popBackStack() }) { site ->
+                    settingsVm.signingIn = site
+                    nav.navigate(Routes.SIGN_IN)
+                }
+            }
+            composable(Routes.SIGN_IN) {
+                val site = settingsVm.signingIn
+                if (site == null) LaunchedEffect(Unit) { nav.popBackStack() }
+                else SignInScreen(
+                    site,
+                    onDone = {
+                        settingsVm.finishSignIn(site) { ok ->
+                            snack.show(if (ok) "Signed in to ${site.name}." else "No sign-in found for ${site.name}.")
+                        }
+                        nav.popBackStack()
+                    },
+                    onBack = { nav.popBackStack() },
                 )
             }
             composable(Routes.ENGINE) { EngineScreen(settingsVm, snack, onBack = { nav.popBackStack() }) }

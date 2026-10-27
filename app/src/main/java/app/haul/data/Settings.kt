@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -52,6 +53,8 @@ data class AppSettings(
     /** Preferred subtitle language code, or empty for off. */
     val subtitleLang: String = "",
     val subtitleMode: SubtitleMode = SubtitleMode.EMBED,
+    /** Ids of the sites signed in to from Settings → Accounts. */
+    val signedInSites: Set<String> = emptySet(),
 ) {
     /** "1080p MP4" */
     val videoPresetLabel: String get() = "${videoHeight}p ${videoContainer.uppercase()}"
@@ -107,6 +110,7 @@ class SettingsRepository(private val context: Context) {
         val skippedVersion = intPreferencesKey("skipped_version")
         val subtitleLang = stringPreferencesKey("subtitle_lang")
         val subtitleMode = stringPreferencesKey("subtitle_mode")
+        val signedInSites = stringSetPreferencesKey("signed_in_sites")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -134,6 +138,7 @@ class SettingsRepository(private val context: Context) {
             skippedVersionCode = p[K.skippedVersion] ?: 0,
             subtitleLang = p[K.subtitleLang] ?: "",
             subtitleMode = p[K.subtitleMode]?.let { runCatching { SubtitleMode.valueOf(it) }.getOrNull() } ?: SubtitleMode.EMBED,
+            signedInSites = p[K.signedInSites] ?: emptySet(),
         )
     }
 
@@ -166,6 +171,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppUpdateCheck(on: Boolean) = context.dataStore.edit { it[K.appUpdateCheck] = on }
     suspend fun setAppLastCheck(t: Long) = context.dataStore.edit { it[K.appLastCheck] = t }
     suspend fun setSkippedVersion(code: Int) = context.dataStore.edit { it[K.skippedVersion] = code }
+    suspend fun setSignedIn(siteId: String, on: Boolean) = context.dataStore.edit {
+        val now = it[K.signedInSites] ?: emptySet()
+        it[K.signedInSites] = if (on) now + siteId else now - siteId
+    }
     suspend fun setSubtitles(lang: String, mode: SubtitleMode) = context.dataStore.edit {
         it[K.subtitleLang] = lang
         it[K.subtitleMode] = mode.name

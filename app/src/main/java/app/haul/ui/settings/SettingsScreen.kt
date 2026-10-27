@@ -64,6 +64,7 @@ fun SettingsScreen(
     snack: SnackState,
     onBack: () -> Unit,
     onEngine: () -> Unit,
+    onAccounts: () -> Unit,
     onAbout: () -> Unit,
 ) {
     val c = Haul.colors
@@ -97,6 +98,14 @@ fun SettingsScreen(
                     )
                     SettingsRow("Download on mobile data", "Wi-Fi is always used first", { vm.setMobileData(!s.mobileData) }, switch = s.mobileData)
                     SettingsRow("Faster downloads (aria2c)", "Several connections per file", { vm.setAria2c(!s.aria2c) }, switch = s.aria2c)
+                }
+                SettingsGroup("ACCOUNTS") {
+                    val n = s.signedInSites.size
+                    SettingsRow(
+                        "Sign in to sites",
+                        if (n == 0) "For private, members-only and age-restricted videos" else "$n signed in",
+                        onAccounts, first = true,
+                    )
                 }
                 SettingsGroup("DOWNLOAD ENGINE") {
                     val v = vm.engineVersion ?: s.ytdlpBundledVersion ?: "…"
