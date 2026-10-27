@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Haul downloader</title>
 <meta name="description" content="Paste a link, pick the quality, and save video or audio. Powered by yt-dlp.">
+<meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F1EA" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
@@ -14,31 +19,49 @@
 <div class="wrap">
   <div class="top">
     <a class="mark" href="./">haul<span>.</span></a>
-    <nav class="nav"><a href="#api">API</a><a href="api/docs">Docs</a></nav>
+    <nav class="nav"><a href="#" id="install" class="hidden">Install app</a></nav>
   </div>
 
   <h1>Save video and audio from a link.</h1>
-  <p class="lead">Paste a link from YouTube or 1,000+ other sites, pick the quality and audio track, and download.</p>
+  <p class="lead">Paste a link from YouTube or 1,000+ other sites. Pick the quality, audio track, subtitles or a clip, and download. Paste several links at once to grab them all.</p>
 
   <form class="paste" id="form">
-    <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://…" aria-label="Link" required>
+    <div class="field">
+      <textarea id="url" rows="1" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…" aria-label="Link, or several links on separate lines" required></textarea>
+      <button type="button" class="iconbtn" id="pastebtn" title="Paste" aria-label="Paste">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>
+      </button>
+    </div>
     <button class="btn" id="fetch" type="submit">Get</button>
   </form>
-  <div class="hint" id="hint"></div>
+  <div class="hint" id="hint" role="status" aria-live="polite"></div>
+
+  <div class="where hidden" id="wherewrap">
+    <span class="label">Download on</span>
+    <div class="seg" role="radiogroup" aria-label="Where downloads run">
+      <button type="button" role="radio" data-where="pc">This PC</button>
+      <button type="button" role="radio" data-where="server">Server</button>
+    </div>
+  </div>
+  <p class="sub wherenote" id="wherenote"></p>
+
 
   <div class="card hidden" id="keycard">
-    <div class="label" style="margin-bottom:8px">API key</div>
-    <p style="margin:0 0 10px;color:var(--mid);font-size:14px">This server needs a key. It's saved in this browser only.</p>
-    <form class="paste" id="keyform"><input id="key" type="password" placeholder="Key" aria-label="API key"><button class="btn small" type="submit">Save</button></form>
+    <div class="label" style="margin-bottom:8px">Access key</div>
+    <p class="sub">This server needs a key. It's saved in this browser only.</p>
+    <form class="paste" id="keyform"><input id="key" type="password" placeholder="Key" aria-label="Access key"><button class="btn small" type="submit">Save</button></form>
   </div>
+
+  <p class="sub hidden" style="margin-top:16px" id="inlist">This video is part of a playlist. <button type="button" class="linkbtn" id="showlist">Show the whole playlist</button></p>
 
   <!-- One video -->
   <div class="card hidden" id="mediacard">
     <div class="media">
       <img id="thumb" alt="">
-      <div>
+      <div class="minfo">
         <h2 id="title"></h2>
         <div class="meta" id="meta"></div>
+        <div class="meta" id="stats"></div>
       </div>
     </div>
 
@@ -54,46 +77,61 @@
       <label id="cover-wrap" class="check hidden"><input type="checkbox" id="cover" checked> Cover art</label>
     </div>
 
-    <div class="rows" id="rows" role="radiogroup"></div>
+    <div class="rows" id="rows" role="radiogroup" aria-label="Quality"></div>
+
+    <details class="more" id="more">
+      <summary>More options <span class="label" id="moresum"></span></summary>
+      <div class="opts" style="margin-top:12px">
+        <label id="subs-wrap">Subtitles<select id="subs"><option value="">None</option></select></label>
+        <label>Clip from<input id="start" class="time" placeholder="0:00" inputmode="numeric" aria-label="Clip start"></label>
+        <label>to<input id="end" class="time" placeholder="end" inputmode="numeric" aria-label="Clip end"></label>
+      </div>
+      <div class="chapters hidden" id="chapters"></div>
+      <button type="button" class="linkbtn" id="directbtn">Show direct links (no server download)</button>
+      <div id="direct"></div>
+    </details>
+
     <button class="btn go" id="go" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
       <span>Download</span>
     </button>
   </div>
 
-  <!-- Playlist -->
+  <!-- Playlist, or several pasted links -->
   <div class="card hidden" id="listcard">
     <div class="label" id="listmeta" style="margin-bottom:6px"></div>
-    <h2 id="listtitle" style="margin:0 0 8px;font-size:18px"></h2>
+    <h2 id="listtitle" class="ltitle"></h2>
+    <div class="opts">
+      <label>Save as<select id="lkind"><option value="video">Video</option><option value="audio">Audio</option></select></label>
+      <label id="lheight-wrap">Quality<select id="lheight"><option value="">Best</option><option>2160</option><option>1440</option><option selected>1080</option><option>720</option><option>480</option><option>360</option></select></label>
+      <label id="lcontainer-wrap">File type<select id="lcontainer"><option value="mp4">MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option></select></label>
+      <label id="laudio-wrap" class="hidden">Format<select id="laudio"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="opus">Opus</option></select></label>
+    </div>
+    <label class="selall"><input type="checkbox" id="selall" checked> <span id="selcount"></span></label>
     <div class="list" id="entries"></div>
+    <button class="btn go" id="lgo" type="button"><span id="lgolabel">Download all</span></button>
+    <p class="sub" id="lnote" style="margin:10px 0 0"></p>
   </div>
 
   <!-- Downloads -->
   <div class="card hidden" id="jobscard">
-    <div class="label" style="margin-bottom:8px">Downloads</div>
+    <div class="jhead"><div class="label">Downloads</div><button type="button" class="linkbtn" id="clearjobs">Clear finished</button></div>
     <div id="jobs"></div>
   </div>
 
-  <div class="card" id="api">
-    <div class="label" style="margin-bottom:8px">API</div>
-    <p style="margin:0;color:var(--mid);font-size:14px;line-height:21px">Everything on this page uses a public REST API you can call from apps, scripts and browser extensions. Full reference at <a href="api/docs">/api/docs</a>.</p>
-<pre># 1. Formats for a link
-curl -X POST <span class="origin"></span>/api/info -H 'Content-Type: application/json' \
-  -d '{"url":"https://youtu.be/…"}'
 
-# 2. Start a download (video 1080p MP4, or "kind":"audio","audio_format":"mp3")
-curl -X POST <span class="origin"></span>/api/jobs -H 'Content-Type: application/json' \
-  -d '{"url":"https://youtu.be/…","kind":"video","height":1080}'
-
-# 3. Progress, then the file
-curl <span class="origin"></span>/api/jobs/JOB_ID
-curl -OJ <span class="origin"></span>/api/jobs/JOB_ID/file</pre>
-  </div>
+  <!-- Apps, filled from /api/releases; stays hidden when nothing is uploaded -->
+  <section class="gethaul hidden" id="gethaul">
+    <h2 class="ghtitle">Get Haul</h2>
+    <p class="sub">Download on your phone, or straight to your own PC.</p>
+    <div class="ghgrid" id="ghgrid"></div>
+    <div class="ghfiles hidden" id="ghfiles"><div class="label" style="margin-bottom:8px">More downloads</div><div id="ghfilelist"></div></div>
+  </section>
 
   <footer>
+    <nav class="flinks"><a href="about">About</a><a href="helper">PC helper</a><a href="privacy">Privacy</a><a href="terms">Terms</a><a href="copyright">Copyright</a><a href="contact">Contact</a></nav>
     Download only content you own, content in the public domain, or content you have permission to save.
-    You're responsible for respecting copyright and each site's terms. Files are deleted from the server after <span id="ttl">an hour</span>.
-    <br><br><span id="versions"></span>
+    You're responsible for respecting copyright and each site's terms. Files made on the server are deleted a few minutes after you download them, or after <span id="ttl">30 minutes</span> if nobody does.
   </footer>
 </div>
 <script src="app.js"></script>

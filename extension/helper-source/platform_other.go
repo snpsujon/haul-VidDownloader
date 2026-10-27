@@ -68,6 +68,8 @@ func hide(c *exec.Cmd) {}
 
 func reveal(path string) error { return openFolder(filepath.Dir(path)) }
 
+func openPath(p string) error { return openFolder(p) }
+
 func openFolder(dir string) error {
 	if runtime.GOOS == "darwin" {
 		return exec.Command("open", dir).Start()

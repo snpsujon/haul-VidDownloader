@@ -14,10 +14,15 @@ import (
 )
 
 const (
-	version     = "0.1.0"
-	hostName    = "app.haul.helper"
-	extensionID = "pjolfkooklpnndljgomfbnnhigaoecoe"
+	version  = "0.3.0"
+	hostName = "app.haul.helper"
 )
+
+// The extensions allowed to talk to the helper.
+var extensionIDs = []string{
+	"hnicogbjbfkjlkkeajepgjkkhojceeak", // Chrome Web Store
+	"pjolfkooklpnndljgomfbnnhigaoecoe", // unpacked copy loaded from the chrome folder (fixed by the manifest key)
+}
 
 // Paths under %LOCALAPPDATA%\Haul\helper.
 func baseDir() string {

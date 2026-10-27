@@ -58,6 +58,10 @@ func reveal(path string) error {
 	return c.Start()
 }
 
+func openPath(p string) error {
+	return exec.Command("explorer", p).Start()
+}
+
 func openFolder(dir string) error {
 	return exec.Command("explorer", dir).Start()
 }

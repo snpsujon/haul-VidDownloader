@@ -37,12 +37,16 @@ func install() error {
 	// 2. Tell the browsers about it.
 	step("Connecting to Chrome, Edge, Brave and Chromium")
 	manifest := filepath.Join(baseDir(), hostName+".json")
+	origins := []string{}
+	for _, id := range extensionIDs {
+		origins = append(origins, "chrome-extension://"+id+"/")
+	}
 	body, _ := json.MarshalIndent(map[string]any{
 		"name":            hostName,
 		"description":     "Haul desktop helper",
 		"path":            target,
 		"type":            "stdio",
-		"allowed_origins": []string{"chrome-extension://" + extensionID + "/"},
+		"allowed_origins": origins,
 	}, "", "  ")
 	if err := os.WriteFile(manifest, body, 0o644); err != nil {
 		return err

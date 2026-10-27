@@ -10,6 +10,9 @@
   <header>
     <img src="icons/icon32.png" width="22" height="22" alt="">
     <strong>Haul</strong>
+    <a id="history" href="#" title="Download history" aria-label="Download history">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg>
+    </a>
     <a id="settings" href="#" title="Settings" aria-label="Settings">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </a>
@@ -32,12 +35,20 @@
 
     <!-- Send to phone -->
     <section id="phone" class="panel">
-      <div class="qr"><canvas id="qr"></canvas></div>
-      <p id="qrHint" class="hint"></p>
+      <div id="paired" hidden>
+        <button id="sendPhone" class="btn primary block big">Send to <span id="deviceName"></span></button>
+        <p id="sendStatus" class="hint">One tap. It opens in Haul on your phone.</p>
+      </div>
+      <div id="qrBox">
+        <div class="qr"><canvas id="qr"></canvas></div>
+        <p id="qrHint" class="hint"></p>
+      </div>
       <div class="row">
         <button id="copy" class="btn small">Copy link</button>
         <button id="switchMode" class="btn small"></button>
+        <button id="showQr" class="btn small" hidden>Show QR code</button>
       </div>
+      <p id="pairTip" class="tip" hidden><a href="#" id="pairLink">Pair your phone</a> to send with one tap, no scanning.</p>
     </section>
 
     <!-- Download on this PC -->
@@ -47,13 +58,25 @@
       <div id="pcMissing" hidden>
         <p><strong>Set up desktop downloads once.</strong><br>
           <span class="muted">Saving on this PC needs the small Haul helper app. It takes about a minute.</span></p>
-        <button id="setup" class="btn primary block">Show me how</button>
+        <button id="getHelper" class="btn primary block">Download the PC helper</button>
+        <button id="setup" class="btn block" style="margin-top:8px">How to set it up</button>
       </div>
 
       <div id="pcReady" hidden>
         <div class="seg mode">
           <button data-mode="video" aria-selected="true">Video</button>
           <button data-mode="audio" aria-selected="false">Audio</button>
+        </div>
+        <div id="scopeRow" class="seg scope" hidden>
+          <button data-scope="one" aria-selected="true">This video</button>
+          <button data-scope="all" aria-selected="false">Whole playlist</button>
+        </div>
+        <label id="clipRow" class="check"><input type="checkbox" id="clipOn"> Only a part (clip)</label>
+        <div id="clipBox" class="clip" hidden>
+          <label>From <input id="clipFrom" type="text" placeholder="0:00" spellcheck="false"></label>
+          <button id="fromNow" class="btn small" title="Use the video's current time">Now</button>
+          <label>To <input id="clipTo" type="text" placeholder="end" spellcheck="false"></label>
+          <button id="toNow" class="btn small" title="Use the video's current time">Now</button>
         </div>
         <div class="row">
           <select id="quality" aria-label="Video quality">
@@ -80,6 +103,7 @@
         <button id="clear" class="btn small">Clear finished</button>
       </div>
     </section>
+    <p id="tip" class="tip" hidden>New: a Haul button right on videos. <a href="#" id="tipOn">Turn it on</a></p>
   </main>
 
   <script src="lib/qrcode.js"></script>

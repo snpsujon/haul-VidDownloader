@@ -251,6 +251,7 @@ def summarize(info: dict, container: str = "mp4", language: str | None = None) -
             if not e:
                 continue
             entries.append({
+                "index": len(entries) + 1,
                 "id": e.get("id"),
                 "title": e.get("title"),
                 "url": e.get("url") or e.get("webpage_url"),
@@ -285,8 +286,74 @@ def summarize(info: dict, container: str = "mp4", language: str | None = None) -
         "video": video,
         "recommended_height": recommended_height(video),
         "audio": audio_choices(info, language),
-        "subtitles": sorted((info.get("subtitles") or {}).keys()),
+        "subtitles": subtitle_choices(info),
+        "stats": {
+            "views": info.get("view_count"),
+            "likes": info.get("like_count"),
+            "comments": info.get("comment_count"),
+            "followers": info.get("channel_follower_count"),
+            "uploaded": info.get("upload_date"),
+        },
+        "channel_url": info.get("channel_url") or info.get("uploader_url"),
+        "description": (info.get("description") or "")[:500],
+        "chapters": [{"title": c.get("title"), "start": c.get("start_time"), "end": c.get("end_time")}
+                     for c in (info.get("chapters") or [])][:100],
     }
+
+
+def subtitle_choices(info: dict) -> list[dict]:
+    """Uploaded subtitles first, then YouTube's automatic captions in the original language."""
+    out = []
+    subs = info.get("subtitles") or {}
+    for code, tracks in subs.items():
+        if code == "live_chat":
+            continue
+        name = (tracks[0].get("name") if tracks else None) or code
+        out.append({"code": code, "name": name, "auto": False})
+    auto = info.get("automatic_captions") or {}
+    have = {s["code"] for s in out}
+    # Auto captions come in every translated language; only offer the spoken ones.
+    for code, tracks in auto.items():
+        if code in have or "-" in code and not code.endswith("-orig"):
+            continue
+        if code.endswith("-orig") or code == info.get("language"):
+            name = (tracks[0].get("name") if tracks else None) or code
+            out.append({"code": code, "name": name, "auto": True})
+    return sorted(out, key=lambda s: (s["auto"], s["name"].lower()))
+
+
+def direct_links(info: dict) -> list[dict]:
+    """Formats a browser can fetch straight from the site, without going through this server.
+
+    Only single files with both sound and picture, or sound alone. Many sites (YouTube
+    included) tie these links to the server's IP, so they don't always open elsewhere.
+    """
+    d = info.get("duration")
+    out = []
+    for f in info.get("formats") or []:
+        url = f.get("url") or ""
+        proto = (f.get("protocol") or "").lower()
+        if not url or "m3u8" in proto or "dash" in proto or ".m3u8" in url or not _usable(f):
+            continue
+        if is_combined(f):
+            kind = "video"
+        elif is_audio_only(f):
+            kind = "audio"
+        else:
+            continue
+        out.append({
+            "kind": kind,
+            "format_id": f.get("format_id"),
+            "ext": f.get("ext"),
+            "height": f.get("height"),
+            "label": height_label(f["height"]) if kind == "video" and f.get("height") else
+                     f"{codec_name(f.get('acodec'))} {_kbps(f)}k".strip(),
+            "language": f.get("language"),
+            "size": fmt_size(f, d),
+            "url": url,
+        })
+    out.sort(key=lambda x: (x["kind"] != "video", -(x["height"] or 0), -(x["size"] or 0)))
+    return out
 
 
 def _thumb(info: dict) -> str | None:
@@ -315,4 +382,28 @@ def choose_selector(info: dict, kind: str, *, height: int | None, container: str
         below = [c for c in choices if c["height"] <= height]
         exact = [max(below, key=lambda c: c["height"])] if below else [min(choices, key=lambda c: c["height"])]
     c = exact[0]
-    return c["selector"], f"{c['height']}p {container.upper()}"
+    return c["selector"], (f"{c['height']}p " if c["height"] else "Best ") + container.upper()
+
+
+_SORT = {
+    "mp4": ["vcodec:h264", "acodec:aac"],
+    "webm": ["vcodec:vp9", "acodec:opus"],
+    "mkv": [],
+}
+
+
+def generic_selector(kind: str, *, height: int | None, audio_format: str, language: str | None) -> str:
+    """A selector that works for any video, for playlists where each item has its own formats."""
+    lf = _lang_filter(language)
+    if kind == "audio":
+        if audio_format == "m4a":
+            return f"bestaudio[ext=m4a]{lf}/bestaudio[ext=m4a]/bestaudio{lf}/bestaudio/best"
+        if audio_format == "opus":
+            return f"bestaudio[acodec=opus]{lf}/bestaudio[acodec=opus]/bestaudio{lf}/bestaudio/best"
+        return f"bestaudio{lf}/bestaudio/best"
+    h = f"[height<={height}]" if height else ""
+    return f"bv*{h}+ba{lf}/bv*{h}+ba/b{h}/bv*+ba/b"
+
+
+def format_sort(container: str) -> list[str]:
+    return _SORT.get(container, [])

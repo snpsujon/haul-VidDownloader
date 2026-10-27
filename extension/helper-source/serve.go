@@ -29,6 +29,14 @@ type message struct {
 	AudioFormat string `json:"audioFormat,omitempty"`
 	Folder      string `json:"folder,omitempty"`
 	Path        string `json:"path,omitempty"`
+
+	Playlist bool     `json:"playlist,omitempty"` // the whole playlist or channel
+	Start    float64  `json:"start,omitempty"`    // clip start, in seconds
+	End      float64  `json:"end,omitempty"`      // clip end, in seconds (0: to the end)
+	Subs     string   `json:"subs,omitempty"`     // "", "embed" or "file"
+	SubLangs string   `json:"subLangs,omitempty"` // like "en" or "bn,en"
+	Thumb    string   `json:"thumb,omitempty"`    // "", "embed" or "file"
+	Paths    []string `json:"paths,omitempty"`
 }
 
 type out map[string]any
@@ -102,9 +110,19 @@ func handle(m message) {
 		}
 		jobsMu.Unlock()
 	case "reveal":
-		if fileExists(m.Path) {
+		if pathExists(m.Path) {
 			reveal(m.Path)
 		}
+	case "open":
+		if pathExists(m.Path) {
+			openPath(m.Path)
+		}
+	case "stat":
+		exists := make([]bool, len(m.Paths))
+		for i, p := range m.Paths {
+			exists[i] = pathExists(p)
+		}
+		send(out{"req": m.Req, "ok": true, "exists": exists})
 	case "openFolder":
 		dir, err := folderFor(m.Folder)
 		if err == nil {
@@ -152,18 +170,52 @@ func folderFor(custom string) (string, error) {
 	return dir, os.MkdirAll(dir, 0o755)
 }
 
+var subLangsRe = regexp.MustCompile(`^[A-Za-z0-9,.*_-]{1,60}$`)
+
 func ytdlpArgs(m message, dir string) []string {
+	name := "%(title).150B [%(id)s]" + clipTag(m) + audioTag(m) + ".%(ext)s"
+	if m.Playlist {
+		name = "%(playlist_title,playlist_id|Playlist).100B/%(playlist_autonumber)03d - " + name
+	}
 	a := []string{
 		"--newline", "--progress", "--no-simulate", "--no-colors", "--encoding", "utf-8",
-		"--no-playlist", "--no-mtime", "--windows-filenames",
+		"--no-mtime", "--windows-filenames",
 		"--ffmpeg-location", ffmpegPath(),
 		"-P", dir,
 		"-P", "temp:" + filepath.Join(dir, ".haul-tmp", m.ID),
-		"-o", "%(title).150B [%(id)s]" + audioTag(m) + ".%(ext)s",
-		"--progress-template", "download:HAULP %(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
+		"-o", name,
+		"--progress-template", "download:HAULP %(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(info.playlist_autonumber)s|%(info.n_entries)s",
 		"--progress-template", "postprocess:HAULPP %(progress.postprocessor)s",
 		"--print", "before_dl:HAULT %(title)s",
 		"--print", "after_move:HAULF %(filepath)s",
+	}
+	if m.Playlist {
+		a = append(a, "--yes-playlist", "--ignore-errors")
+	} else {
+		a = append(a, "--no-playlist")
+		if m.Start > 0 || m.End > 0 {
+			end := "inf"
+			if m.End > m.Start {
+				end = strconv.FormatFloat(m.End, 'f', 2, 64)
+			}
+			a = append(a, "--download-sections", "*"+strconv.FormatFloat(m.Start, 'f', 2, 64)+"-"+end, "--force-keyframes-at-cuts")
+		}
+	}
+	if m.Mode != "audio" && (m.Subs == "embed" || m.Subs == "file") {
+		langs := m.SubLangs
+		if !subLangsRe.MatchString(langs) {
+			langs = "en"
+		}
+		a = append(a, "--write-subs", "--write-auto-subs", "--sub-langs", langs, "--convert-subs", "srt")
+		if m.Subs == "embed" {
+			a = append(a, "--embed-subs")
+		}
+	}
+	switch m.Thumb {
+	case "embed":
+		a = append(a, "--embed-thumbnail", "--convert-thumbnails", "jpg")
+	case "file":
+		a = append(a, "--write-thumbnail", "--convert-thumbnails", "jpg")
 	}
 	if m.Mode == "audio" {
 		f := m.AudioFormat
@@ -179,6 +231,26 @@ func ytdlpArgs(m message, dir string) []string {
 		a = append(a, "-f", "bv*+ba/b", "-S", sort, "--merge-output-format", "mp4", "--embed-metadata")
 	}
 	return append(a, "--", m.URL)
+}
+
+// Clips get the cut in their name, like " (clip 1m30s-2m05s)".
+func clipTag(m message) string {
+	if m.Playlist || (m.Start <= 0 && m.End <= 0) {
+		return ""
+	}
+	end := "end"
+	if m.End > m.Start {
+		end = clock(m.End)
+	}
+	return " (clip " + clock(m.Start) + "-" + end + ")"
+}
+
+func clock(sec float64) string {
+	s := int(sec)
+	if s >= 3600 {
+		return fmt.Sprintf("%dh%02dm%02ds", s/3600, s%3600/60, s%60)
+	}
+	return fmt.Sprintf("%dm%02ds", s/60, s%60)
 }
 
 // Audio jobs save under a tagged name first. Otherwise yt-dlp sees a video saved earlier under the
@@ -223,6 +295,7 @@ func runDownload(m message) {
 	log.Printf("download %s %s %s", m.ID, m.Mode, m.URL)
 
 	var lastErr string
+	var failed int
 	var errWG sync.WaitGroup
 	errWG.Add(1)
 	go func() {
@@ -232,12 +305,14 @@ func runDownload(m message) {
 			line := strings.TrimSpace(sc.Text())
 			if strings.HasPrefix(line, "ERROR:") {
 				lastErr = strings.TrimSpace(errorPrefix.ReplaceAllString(line, ""))
+				failed++
 				log.Printf("%s %s", m.ID, line)
 			}
 		}
 	}()
 
 	var file string
+	var saved int
 	var lastSent time.Time
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
@@ -266,21 +341,24 @@ func runDownload(m message) {
 			if len(parts) > 2 {
 				p["eta"] = clean(parts[2])
 			}
+			if len(parts) > 4 && m.Playlist {
+				if n, err := strconv.Atoi(clean(parts[3])); err == nil {
+					p["item"] = n
+				}
+				if n, err := strconv.Atoi(clean(parts[4])); err == nil {
+					p["count"] = n
+				}
+			}
 			send(p)
 		case strings.HasPrefix(line, "HAULF "):
-			file = strings.TrimPrefix(line, "HAULF ")
+			file = untag(m, strings.TrimPrefix(line, "HAULF "))
+			saved++
 		}
 	}
 	errWG.Wait()
 	err = c.Wait()
 	os.RemoveAll(filepath.Join(dir, ".haul-tmp", m.ID))
 	os.Remove(filepath.Join(dir, ".haul-tmp")) // only succeeds once empty
-	if tag := audioTag(m); tag != "" && strings.Contains(filepath.Base(file), tag+".") {
-		final := filepath.Join(filepath.Dir(file), strings.Replace(filepath.Base(file), tag+".", ".", 1))
-		if os.Rename(file, final) == nil {
-			file = final
-		}
-	}
 
 	jobsMu.Lock()
 	delete(jobs, m.ID)
@@ -290,6 +368,14 @@ func runDownload(m message) {
 	switch {
 	case cancelled:
 		send(out{"type": "cancelled", "id": m.ID})
+	case m.Playlist && saved > 0:
+		// A playlist is done when anything was saved; the file is its folder.
+		res := out{"type": "done", "id": m.ID, "file": filepath.Dir(file), "saved": saved}
+		if failed > 0 {
+			res["note"] = fmt.Sprintf("%d couldn't be saved", failed)
+		}
+		log.Printf("done %s playlist %d saved, %d failed", m.ID, saved, failed)
+		send(res)
 	case err != nil || file == "":
 		if lastErr == "" {
 			lastErr = "yt-dlp stopped without saving anything."
@@ -299,6 +385,27 @@ func runDownload(m message) {
 		log.Printf("done %s %s", m.ID, file)
 		send(out{"type": "done", "id": m.ID, "file": file})
 	}
+}
+
+// untag renames an audio file saved under its temporary tagged name (see audioTag).
+func untag(m message, file string) string {
+	tag := audioTag(m)
+	if tag == "" || !strings.Contains(filepath.Base(file), tag+".") {
+		return file
+	}
+	final := filepath.Join(filepath.Dir(file), strings.Replace(filepath.Base(file), tag+".", ".", 1))
+	if os.Rename(file, final) == nil {
+		return final
+	}
+	return file
+}
+
+func pathExists(p string) bool {
+	if p == "" || !filepath.IsAbs(p) {
+		return false
+	}
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 // clean drops yt-dlp's placeholders for unknown values.

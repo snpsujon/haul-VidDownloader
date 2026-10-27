@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Haul admin</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<div class="wrap wide">
+  <div class="top">
+    <a class="mark" href="./">haul<span>.</span></a>
+    <nav class="nav"><a href="./">Downloader</a><a href="#" id="logout" class="hidden">Sign out</a></nav>
+  </div>
+
+  <!-- Sign in -->
+  <div id="login" class="hidden">
+    <h1>Admin</h1>
+    <form class="paste" id="loginform" style="max-width:420px">
+      <input id="password" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" required>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+    <div class="hint" id="loginhint"></div>
+  </div>
+
+  <div id="off" class="hidden">
+    <h1>Admin is off</h1>
+    <p class="lead">Set <code>HAUL_ADMIN_PASSWORD</code> on the server and restart it to use this page.</p>
+  </div>
+
+  <div id="panel" class="hidden">
+    <h1>Admin</h1>
+    <div id="alerts"></div>
+    <div class="tiles" id="tiles"></div>
+
+    <!-- Charts -->
+    <div class="card">
+      <div class="chead"><div class="label">Downloads per day</div>
+        <div class="seg small" role="radiogroup" aria-label="Days shown" id="range"><button type="button" data-days="14" aria-checked="true">14 days</button><button type="button" data-days="30">30 days</button></div></div>
+      <div id="chart" class="chart"></div>
+      <div class="legend"><span><i class="ok"></i>Worked</span><span><i class="bad"></i>Failed</span><span id="chartsum"></span></div>
+      <div class="label" style="margin:18px 0 0">Sites, last 7 days</div>
+      <div class="tablewrap"><table class="t" id="sites"><thead><tr><th>Site</th><th>Downloads</th><th>Failed</th><th style="width:40%">Failure rate</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- Cookies -->
+    <div class="card" id="cookies">
+      <div class="chead"><div class="label">YouTube cookies</div><span class="pill" id="cookiepill"></span></div>
+      <div id="cookiestate" class="sub" style="margin-top:8px"></div>
+      <details class="more" id="cookiehelp">
+        <summary>How to get cookies.txt</summary>
+        <ol class="steps">
+          <li>Use a spare Google account, not your main one. YouTube can sign it out or flag it.</li>
+          <li>In Chrome or Firefox, open a private window and sign in to YouTube with it.</li>
+          <li>Install a "Get cookies.txt LOCALLY" extension and export cookies for youtube.com (Netscape format).</li>
+          <li>Close the private window without signing out, so the cookies keep working.</li>
+          <li>Upload the file here, or paste what's in it. The server checks it straight away.</li>
+        </ol>
+      </details>
+      <textarea id="cookietext" rows="5" spellcheck="false" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	…"></textarea>
+      <div class="actions">
+        <label class="btn small ghost filebtn">Upload cookies.txt<input type="file" id="cookiefile" accept=".txt,text/plain"></label>
+        <button class="btn small" id="cookiesave" type="button">Save and check</button>
+        <button class="btn small ghost" id="cookiecheck" type="button">Check now</button>
+        <button class="btn small ghost" id="cookiedel" type="button">Remove</button>
+      </div>
+      <div class="hint" id="cookiehint"></div>
+    </div>
+
+    <!-- Downloads offered on the page -->
+    <div class="card" id="releases">
+      <div class="chead"><div class="label">App, extension and helper downloads</div><span class="label" id="uplimit"></span></div>
+      <p class="sub" style="margin-top:8px">What you upload here shows on the main page under "Get Haul". Uploading the Android app also publishes the update file the app checks (<code>/app/version.json</code>), so phones get the new version.</p>
+
+      <div class="rel">
+        <div class="relhead"><b>Android app</b><span class="sub" id="rel-android"></span></div>
+        <form id="f-android" class="relform">
+          <div class="opts">
+            <label>Version<input name="version_name" placeholder="1.3.0" required></label>
+            <label>Version code<input name="version_code" type="number" min="1" placeholder="10300" required></label>
+            <label>Oldest allowed<input name="min_supported" type="number" min="0" value="0" title="Phones below this version code must update"></label>
+          </div>
+          <label class="block">What's new (one per line)<textarea name="changelog" rows="3" placeholder="Faster playlist downloads&#10;Bug fixes"></textarea></label>
+          <div class="opts">
+            <label>Universal APK (works on every phone)<input type="file" name="universal" accept=".apk"></label>
+            <label>arm64-v8a (most phones)<input type="file" name="arm64-v8a" accept=".apk"></label>
+            <label>armeabi-v7a (older phones)<input type="file" name="armeabi-v7a" accept=".apk"></label>
+            <label>x86_64<input type="file" name="x86_64" accept=".apk"></label>
+          </div>
+          <div class="actions"><button class="btn small" type="submit">Publish app</button><button class="btn small ghost" type="button" data-unpublish="android">Remove</button></div>
+        </form>
+      </div>
+
+      <div class="rel">
+        <div class="relhead"><b>Browser extension</b><span class="sub" id="rel-extension"></span></div>
+        <form id="f-extension" class="relform">
+          <div class="opts">
+            <label>Version<input name="version" placeholder="2.0.0"></label>
+            <label class="grow">Chrome Web Store link (optional)<input name="store_url" type="url" placeholder="https://chromewebstore.google.com/detail/…"></label>
+            <label>Extension .zip<input type="file" name="file" accept=".zip,.crx"></label>
+          </div>
+          <label class="block">Notes<textarea name="notes" rows="2" placeholder="Shown on the page, e.g. how to install"></textarea></label>
+          <div class="actions"><button class="btn small" type="submit">Publish extension</button><button class="btn small ghost" type="button" data-unpublish="extension">Remove</button></div>
+        </form>
+      </div>
+
+      <div class="rel">
+        <div class="relhead"><b>PC helper (Windows)</b><span class="sub" id="rel-helper"></span></div>
+        <form id="f-helper" class="relform">
+          <div class="opts">
+            <label>Version<input name="version" placeholder="1.0.0"></label>
+            <label>haul-helper.exe<input type="file" name="file" accept=".exe,.zip,.msi"></label>
+          </div>
+          <label class="block">Notes<textarea name="notes" rows="2" placeholder="Shown on the page"></textarea></label>
+          <div class="actions"><button class="btn small" type="submit">Publish helper</button><button class="btn small ghost" type="button" data-unpublish="helper">Remove</button></div>
+        </form>
+      </div>
+
+      <div class="rel">
+        <div class="relhead"><b>Other files</b><span class="sub">Guides, older versions, anything else to offer</span></div>
+        <form id="f-files" class="relform">
+          <div class="opts">
+            <label class="grow">Title (optional)<input name="title" placeholder="Install guide (PDF)"></label>
+            <label>File<input type="file" name="file" required></label>
+          </div>
+          <div class="actions"><button class="btn small" type="submit">Upload file</button></div>
+        </form>
+        <div class="tablewrap"><table class="t" id="files"><tbody></tbody></table></div>
+      </div>
+      <div class="upbar hidden" id="upbar"><i></i></div>
+      <div class="hint" id="relhint"></div>
+    </div>
+
+    <!-- Live jobs -->
+    <div class="card">
+      <div class="chead"><div class="label">Downloads on the server</div>
+        <span><span class="label" id="filesize"></span> <button class="linkbtn" id="clearfiles" type="button">Delete finished files</button></span></div>
+      <div class="tablewrap"><table class="t" id="jobs"><thead><tr><th>Title</th><th>From</th><th>Format</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- Request log -->
+    <div class="card">
+      <div class="chead"><div class="label">Request log</div>
+        <span><a class="linkbtn" id="export" href="#">Export CSV</a> · <button class="linkbtn" id="clearlog" type="button">Clear</button></span></div>
+      <input id="search" class="search" type="search" placeholder="Search links, titles, IPs, sites" aria-label="Search the log">
+      <div class="tablewrap"><table class="t" id="log"><thead><tr><th>When</th><th>Title / link</th><th>Site</th><th>From</th><th>Format</th><th>Result</th><th>IP</th></tr></thead><tbody></tbody></table></div>
+      <button class="linkbtn" id="moreLog" type="button">Show more</button>
+    </div>
+
+    <!-- Server -->
+    <div class="card">
+      <div class="label" style="margin-bottom:8px">Server</div>
+      <div id="server" class="kv"></div>
+      <p class="sub" style="margin-top:12px">Sites change and old yt-dlp versions stop working. Update when downloads start failing, then restart to load it. Restarting needs Docker (or another process manager) to start the server again.</p>
+      <div class="actions">
+        <button class="btn small" id="update" type="button">Update yt-dlp</button>
+        <button class="btn small ghost" id="restart" type="button">Restart server</button>
+      </div>
+      <div class="hint" id="serverhint"></div>
+    </div>
+  </div>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>

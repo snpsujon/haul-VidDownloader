@@ -15,6 +15,10 @@ server, so there's nothing to build.
 | `app/engine.py` | yt-dlp calls and plain-language errors |
 | `app/jobs.py` | The download queue, progress, and file cleanup |
 | `app/security.py` | Link checks (http/https only, no private addresses) |
+| `app/cookies.py` | The server's YouTube cookies.txt |
+| `app/admin.py` | Admin API (`/admin` page) |
+| `app/legacy.py` | The old server's routes, for the published extension |
+| `app/store.py` | Request log (SQLite) |
 | `static/` | The website |
 | `tests/` | `pytest` tests; they don't touch the network |
 
@@ -42,6 +46,89 @@ pip install -r requirements.txt -r requirements-dev.txt
 pytest
 ```
 
+## What it does
+
+- Paste one link, several links (one per line), or a playlist. Playlists can be downloaded whole
+  (or just the videos you tick) as one ZIP.
+- Video from 8K down to 144p as MP4, MKV or WebM; audio as MP3 (128 to 320k), M4A or Opus with
+  cover art. Pick the audio language on dubbed videos.
+- Embed subtitles (uploaded or YouTube's automatic ones), or download just a clip: type the
+  start and end, or tap a chapter.
+- Live progress, play the file in the page, copy a link to it, and direct links that skip the server.
+- Installs as an app on Android and desktop, and shows up in the share sheet.
+- Admin page at `/admin`: YouTube cookies, what's downloading, a request log with CSV export,
+  disk use, and one-click yt-dlp updates.
+- Keeps the old server's API, so the published "Universal Media Downloader" extension works
+  when its server points here.
+
+## Downloading on the visitor's PC
+
+When the Haul browser extension (with its `haul-helper`) is installed, the site downloads on the
+visitor's own computer, like the extension's popup does: the server only looks the link up, and
+the helper runs yt-dlp and FFmpeg locally and saves to the extension's download folder. Visitors
+can switch to the server with the "Download on" toggle. Clips, subtitles, picking the audio
+language and MKV/WebM still go through the server, because the helper doesn't do those yet.
+
+The extension only talks to sites listed in its `externally_connectable` (pyd.snpsujon.me,
+localhost and 127.0.0.1). Add your domain there if you host the site somewhere else. The site
+looks for the extension IDs in `HAUL_EXTENSION_IDS`.
+
+Files made on the server are deleted a few minutes after they've been downloaded once
+(`HAUL_SEND_GRACE_MIN`), or after `HAUL_FILE_TTL_MIN` if nobody fetches them.
+
+## App, extension and helper downloads
+
+The admin page has an upload card for the Android app (one or more APKs plus version and
+changelog), the browser extension (a .zip, a Chrome Web Store link, or both), the Windows PC
+helper, and any other file. What's uploaded shows on the main page under "Get Haul", and the
+section stays hidden until something is uploaded. Files live in `$HAUL_DATA_DIR/releases`, so
+they survive rebuilds when that folder is a volume.
+
+- `GET /get/android`, `/get/extension`, `/get/helper` always give the latest one.
+- `/about`, `/privacy`, `/terms`, `/copyright` and `/contact` are info pages linked in the footer.
+- `/helper` is a download page for the PC helper with setup steps, for linking from the extension.
+- `GET /app/version.json` is the Android app's update file (same format as
+  `scripts/package_release.py`), published when you upload APKs. The version code can't go down.
+- `GET /api/releases` lists everything as JSON and is open to any origin.
+
+Set `HAUL_PUBLIC_URL` (like `https://haul.example.com`) when the server sits behind a proxy that
+doesn't pass the right host, so the links in `version.json` are correct.
+
+## Admin dashboard
+
+Charts of downloads per day (14 or 30 days) and each site's failure rate. Alerts at the top say
+when YouTube downloads keep failing, cookies stop working or are about to expire, the disk is
+nearly full, or the nightly update failed.
+
+## Pages for search engines
+
+`/` and the site pages `/youtube-downloader`, `/youtube-to-mp3`, `/instagram-downloader`,
+`/tiktok-downloader`, `/facebook-video-downloader` and `/twitter-video-downloader` are each the
+working downloader with their own title, description, help text and FAQ (with schema.org data).
+`/sitemap.xml` and `/robots.txt` are generated. Set `HAUL_PUBLIC_URL` so canonical links use your
+real address, then submit the sitemap in Google Search Console.
+
+## Send to phone
+
+The extension can pair with Haul on a phone once and then send it links through the site:
+`POST /api/pair` (gives `pair_id`, `send_key`, `receive_token`), `POST /api/pair/claim` (phone),
+`GET /api/pair/status?id=&key=` (extension), `POST /api/pair/send` (extension),
+`GET /api/pair/inbox?id=&token=` (phone, returns and removes waiting links) and
+`POST /api/pair/unpair`. Unclaimed pairs expire after 10 minutes, links wait up to 7 days, and a
+phone holds at most 50. Wrong keys get `404 {"ok": false}`. These are open to any origin.
+
+## YouTube cookies
+
+YouTube blocks a lot of servers with "Sign in to confirm you're not a bot". Cookies from a
+signed-in account get past it. Set `HAUL_ADMIN_PASSWORD`, open `/admin`, and upload a
+`cookies.txt` (the page explains how to export one). The server checks it with YouTube right away,
+shows when it stops working, and the downloader shows a notice when YouTube starts refusing.
+Use a spare Google account. The file is kept in `HAUL_DATA_DIR` with private permissions, and each
+download works on its own copy so parallel downloads can't corrupt it.
+
+When YouTube still refuses, the server retries with other YouTube player clients
+(`HAUL_YOUTUBE_CLIENTS`) and remembers the one that worked.
+
 ## Settings
 
 All optional, set as environment variables.
@@ -52,10 +139,24 @@ All optional, set as environment variables.
 | `HAUL_CORS_ORIGINS` | `*` | Sites allowed to call the API from a browser. |
 | `HAUL_MAX_CONCURRENT` | `3` | Downloads running at once on the server. |
 | `HAUL_MAX_ACTIVE_PER_CLIENT` | `3` | Running downloads per IP (or per key). |
-| `HAUL_FILE_TTL_MIN` | `60` | Minutes a finished file stays on the server. |
+| `HAUL_FILE_TTL_MIN` | `30` | Minutes a finished file stays on the server when nobody downloads it. |
+| `HAUL_DELETE_AFTER_SEND` | `1` | Delete a file soon after it has been downloaded once. |
+| `HAUL_SEND_GRACE_MIN` | `5` | Minutes a downloaded file is kept, so a cut-off download can be retried. |
+| `HAUL_EXTENSION_IDS` | store and unpacked IDs | Haul extensions the site asks to download on the visitor's PC. |
 | `HAUL_MAX_FILESIZE_MB` | `2048` | Biggest file the server will download. |
 | `HAUL_MAX_DURATION_MIN` | `240` | Longest video the server will download. |
-| `HAUL_COOKIES_FILE` | (none) | A Netscape `cookies.txt`, for sites that need sign-in or that block servers ("confirm you're not a bot"). |
+| `HAUL_ADMIN_PASSWORD` | (off) | Turns on the `/admin` page. |
+| `HAUL_COOKIES_FILE` | (none) | A `cookies.txt` to start with. It's copied in once; after that, manage cookies on the admin page. |
+| `HAUL_YOUTUBE_CLIENTS` | `tv,web_safari,mweb,android` | YouTube player clients to retry with when YouTube refuses. |
+| `HAUL_MAX_PLAYLIST_ITEMS` | `50` | Most videos one playlist download takes. |
+| `HAUL_LOG_DAYS` | `30` | Days the request log keeps rows. |
+| `HAUL_MAX_UPLOAD_MB` | `1024` | Biggest file the admin can upload (APKs, extension, helper, other files). |
+| `HAUL_PUBLIC_URL` | from the request | The site's public address, used in download links. |
+| `HAUL_AUTO_UPDATE` | `1` | Update yt-dlp every night and re-check the YouTube cookies. `0` turns it off. |
+| `HAUL_AUTO_UPDATE_HOUR` | `4` | Hour of the night (server time) for the update. |
+| `HAUL_AUTO_RESTART` | `1` | Restart once downloads finish to load a new yt-dlp (needs Docker's restart policy). |
+| `HAUL_CONTACT_EMAIL` | none | Email shown on the Contact page (privacy requests and copyright notices point there). |
+| `HAUL_LEGACY_API` | `1` | The old `/api/download`, `/api/progress`, `/downloads/…` routes. Set `0` to turn off. They don't need an API key, because the old extension can't send one. |
 | `HAUL_PROXY` | (none) | Proxy for yt-dlp, e.g. `socks5://host:1080`. |
 | `HAUL_TRUST_PROXY` | off | Set `1` behind a reverse proxy so per-client limits use `X-Forwarded-For`. |
 | `HAUL_DATA_DIR` | `./data` | Where downloads are kept while they wait to be fetched. |
@@ -135,6 +236,22 @@ Starts a download and returns the job (status `201`).
 
 `429` means the caller already has too many downloads running.
 
+Also on `POST /api/jobs`: `"subtitles": ["en"]` (video), `"start": 75, "end": 130` (clip, in
+seconds), and `"playlist": true` with an optional `"playlist_items": [1, 3]` to download a playlist
+as one ZIP. Send `X-Haul-Client: app/1.2.0` (or `extension/2.0.0`) so the admin log shows where
+requests come from.
+
+### `POST /api/jobs/batch`
+
+`{"urls": ["…", "…"], "options": { …same fields as /api/jobs… }}`. Up to 20 links; each becomes its
+own job. Returns `{"results": [{"url", "job"} or {"url", "error", "status"}]}`.
+
+### `GET /api/direct-links?url=…`
+
+Links straight to the site's files (single files with sound, or audio only), so the server's
+bandwidth isn't used. Many sites, YouTube included, tie these to the server's IP, so they may not
+open elsewhere, and they expire.
+
 ### `GET /api/jobs/{id}`
 
 ```json
@@ -157,7 +274,20 @@ pass `?key=` since `EventSource` can't send headers.
 
 ### `GET /api/jobs/{id}/file`
 
-The finished file, as an attachment with its real name. `409` until it's ready.
+The finished file, as an attachment with its real name. `409` until it's ready. Add `?inline=1`
+to play it in a browser.
+
+### Admin API
+
+`/api/admin/*`, with `X-Admin-Token` from `POST /api/admin/login {"password"}`: `overview`, `jobs`,
+`cookies` (GET, PUT `{"text"}`, DELETE, `POST cookies/check`), `requests` (+ `export`, DELETE),
+`files/clear`, `ytdlp/update`, `restart`. All listed in `/api/docs`.
+
+### Old API
+
+The old server's routes still work: `POST /api/download` (form `url`, `format`, `quality`,
+`playlist`) returns a `session_id`; `GET /api/progress` with `X-Session-ID`; files at
+`/downloads/<filename>`; `POST /api/cancel`; `GET /api/direct-links?url=…&format=video|audio`.
 
 ### `DELETE /api/jobs/{id}`
 

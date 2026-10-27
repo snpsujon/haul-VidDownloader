@@ -2,17 +2,66 @@
   "manifest_version": 3,
   "name": "Haul",
   "short_name": "Haul",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "Send the video you're watching to Haul on your phone, or save it on this computer.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx+8XSiSN9H74ZwZXxjFnB02638SNlw8F983X4RUfuFPwF/15se/lnPIoixn6ksWjhjiz9+0MyOiq5zSeMjqQEdLCC7b0kD1tpc64qRBw9U/6sVuSDV8CR0bMP1LFjKb91+4yN6nInLhzJ7MtDBt1PGu0gdik7e1HEbnO2k4vHIE1H4afJgPDsZYWhKD5p84o+xPke3AblYdewlYyQnNAl76FFTbNXDUtoL4/W0YgDiFDo+mJCx21eSwcsZ6x0+PwzaXDaSVgrMujy5/AcHIXwtoF/tDLrxseDptoddjGCRgToahmWoCOouodxgz/4SnwkzGmvpv0guwfp9tFZG+7VQIDAQAB",
   "minimum_chrome_version": "116",
   "action": {
     "default_title": "Haul",
     "default_popup": "popup.html",
-    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png" }
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
   },
-  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-  "background": { "service_worker": "background.js" },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "options_page": "options.html",
-  "permissions": ["activeTab", "contextMenus", "nativeMessaging", "notifications", "storage"]
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "notifications",
+    "scripting",
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "commands": {
+    "download-video": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Download this page's video on this PC"
+    },
+    "download-audio": {
+      "suggested_key": {
+        "default": "Alt+Shift+M"
+      },
+      "description": "Download this page's audio on this PC"
+    },
+    "send-to-phone": {
+      "suggested_key": {
+        "default": "Alt+Shift+Q"
+      },
+      "description": "Send this page to your phone (QR code)"
+    }
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://stackforge-pro.xyz/*",
+      "https://www.stackforge-pro.xyz/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  }
 }

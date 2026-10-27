@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haul PC helper</title>
+<meta name="description" content="Download the Haul PC helper so the Haul extension can save videos straight to your computer.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+.hdl{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0 6px}
+.hmeta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low)}
+ol.hsteps{margin:8px 0 0;padding-left:22px;font-size:15px;line-height:26px;color:var(--mid)}
+ol.hsteps b{color:var(--hi)}
+.hnote{font-size:14px;color:var(--mid);line-height:22px;margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="mark" href="./">haul<span>.</span></a>
+    <nav class="nav"><a href="./">Downloader</a></nav>
+  </div>
+
+  <h1>Haul PC helper</h1>
+  <p class="lead">The helper lets the Haul extension save videos and audio straight to your computer, in full quality, with clips, playlists, subtitles and cover art.</p>
+
+  <div id="have" class="hidden">
+    <div class="hdl">
+      <a class="btn" id="dl" href="get/helper" download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        <span>Download for Windows</span>
+      </a>
+    </div>
+    <div class="hmeta" id="meta"></div>
+    <p class="hnote" id="notes" style="margin-top:10px"></p>
+  </div>
+  <div id="none" class="hidden"><p class="hnote">The helper isn't available to download yet. Check back soon.</p></div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:4px">How to set it up</div>
+    <ol class="hsteps">
+      <li>Install the <b>Haul extension</b> in Chrome, Edge or Brave first<span id="extlink"></span>.</li>
+      <li>Download <b>haul-helper.exe</b> above and run it.</li>
+      <li>If Windows shows "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</li>
+      <li>Restart your browser, then open the Haul extension. It should say the helper is ready.</li>
+    </ol>
+  </div>
+
+  <footer>
+    <nav class="flinks"><a href="about">About</a><a href="helper">PC helper</a><a href="privacy">Privacy</a><a href="terms">Terms</a><a href="copyright">Copyright</a><a href="contact">Contact</a></nav>
+    <p>Download only content you own, content in the public domain, or content you have permission to save.</p>
+  </footer>
+</div>
+<script>
+(function () {
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function bytes(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  fetch('api/releases').then(function (r) { return r.json(); }).then(function (r) {
+    var h = r.helper;
+    if (h && h.url) {
+      $('meta').textContent = [h.version ? 'Version ' + h.version : '', 'Windows', h.size ? bytes(h.size) : '',
+        h.updated ? 'Updated ' + new Date(h.updated * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+      $('notes').textContent = h.notes || '';
+      $('have').classList.remove('hidden');
+    } else $('none').classList.remove('hidden');
+    var x = r.extension, link = x && (x.store_url || x.url);
+    if (link) $('extlink').innerHTML = ' (<a href="' + esc(link) + '" target="_blank" rel="noopener">get it here</a>)';
+  }).catch(function () { $('none').classList.remove('hidden'); });
+})();
+</script>
+</body>
+</html>

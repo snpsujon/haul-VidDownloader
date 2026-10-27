@@ -23,11 +23,21 @@
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
     .row input { flex: 1; min-width: 200px; }
     .saved { color: var(--ok); font-size: 12px; }
+    .err { color: var(--danger); }
+    .pairqr { display: flex; justify-content: center; margin: 8px 0; }
+    .pairqr canvas { border-radius: 12px; background: #fff; }
+    .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 10px 0 4px; }
+    .field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 12px; }
+    .field select, .field input { font-weight: 400; font-size: 13px; }
+    .sites { list-style: none; padding: 0; margin: 8px 0 12px; }
+    .sites li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .sites li:last-child { border-bottom: 0; }
+    kbd { background: var(--ground); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font: 600 12px ui-monospace, monospace; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1><img src="icons/icon48.png" width="32" height="32" alt=""> Haul settings</h1>
+    <h1><img src="icons/icon48.png" width="32" height="32" alt=""> Haul settings <a href="history.html" class="btn small" style="margin-left:auto">Download history</a></h1>
 
     <section>
       <h2>Send to phone</h2>
@@ -38,6 +48,68 @@
         <span><strong>Plain page link</strong><br><span class="muted">Opens the page on the phone. Tap Share, then Haul. Works with any version.</span></span></label>
     </section>
 
+    <section id="pair">
+      <h2>One-tap send to phone</h2>
+      <div id="pairOff">
+        <p class="muted">Pair your phone once. After that, Send to phone goes straight to Haul on it, with no QR code to scan. Links pass through the Haul website and are deleted once your phone picks them up.</p>
+        <button id="pairStart" class="btn primary small">Pair my phone</button>
+      </div>
+      <div id="pairing" hidden>
+        <div class="pairqr"><canvas id="pairQr"></canvas></div>
+        <p class="muted">Scan this with your phone camera and confirm in Haul. Waiting for your phone… The code works for 10 minutes.</p>
+        <button id="pairCancel" class="btn small">Cancel</button>
+      </div>
+      <div id="pairOn" hidden>
+        <div class="status"><span class="dot ok"></span><span>Paired with <span id="pairDevice"></span></span></div>
+        <button id="unpair" class="btn small">Unpair</button>
+      </div>
+      <p id="pairError" class="small err" hidden></p>
+    </section>
+
+    <section id="extras">
+      <h2>Subtitles and cover art</h2>
+      <p class="muted">For downloads on this PC.</p>
+      <div class="grid2">
+        <label class="field">Subtitles
+          <select id="subs">
+            <option value="off">Off</option>
+            <option value="embed">Inside the video</option>
+            <option value="file">Separate .srt file</option>
+          </select>
+        </label>
+        <label class="field">Languages
+          <input id="subLangs" type="text" placeholder="en" spellcheck="false">
+        </label>
+        <label class="field">Cover art
+          <select id="thumb">
+            <option value="off">Off</option>
+            <option value="embed">Inside the file</option>
+            <option value="file">Separate .jpg file</option>
+          </select>
+        </label>
+      </div>
+      <p class="muted small">Language codes separated by commas, like <code>en</code> or <code>bn,en</code>. Auto-made subtitles are used when a video has no others. Subtitles are skipped for audio.</p>
+    </section>
+
+    <section id="inpage">
+      <h2>Download button on videos</h2>
+      <p class="muted">Shows a Haul button when you point at a video, with Send to phone, Download video and Download audio right there.</p>
+      <label class="choice"><input type="checkbox" id="inpageToggle">
+        <span><strong>Show the button on videos</strong><br><span class="muted">Chrome will ask to let Haul see the sites you visit. Haul only looks for videos on the page and doesn't read or send anything else.</span></span></label>
+      <label class="choice" id="youtubeRow"><input type="checkbox" id="youtubeToggle">
+        <span><strong>Also show it on YouTube</strong><br><span class="muted">Off by default. Without it, use the Haul toolbar button, the right-click menu or a keyboard shortcut on YouTube.</span></span></label>
+      <div id="hiddenBox" hidden>
+        <h2 style="margin-top:14px">Hidden on these sites</h2>
+        <ul id="hiddenList" class="sites"></ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Keyboard shortcuts</h2>
+      <ul id="shortcuts" class="sites"></ul>
+      <button id="editShortcuts" class="btn small">Change shortcuts</button>
+    </section>
+
     <section id="desktop">
       <h2>Download on this PC</h2>
       <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking…</span></div>
@@ -46,7 +118,7 @@
       <div id="setupSteps" hidden>
         <p>To save videos on this computer, Haul needs its small helper app. You only do this once.</p>
         <ol>
-          <li>Get <code>haul-helper.exe</code>. It's in the <code>helper</code> folder next to the <code>chrome</code> folder.</li>
+          <li><a id="helperLink" href="#" target="_blank" rel="noopener">Download <code>haul-helper.exe</code></a> for Windows.</li>
           <li>Double-click it. It copies itself to your user folder, downloads yt-dlp and FFmpeg (about 150 MB), and connects to Chrome, Edge and Brave. No admin rights needed.</li>
           <li>If Windows shows "Windows protected your PC", click <em>More info</em>, then <em>Run anyway</em>. That happens because the helper isn't code-signed yet.</li>
           <li>When it says it's done, come back here and click <em>Check again</em>.</li>
@@ -56,6 +128,7 @@
       <div class="row">
         <button id="recheck" class="btn small">Check again</button>
         <button id="update" class="btn small" hidden>Update yt-dlp</button>
+        <a id="newHelper" class="btn small primary" target="_blank" rel="noopener" hidden></a>
       </div>
 
       <div id="folderBox" hidden>
@@ -72,6 +145,7 @@
 
     <p class="muted small">Only save videos you have the right to download.</p>
   </div>
+  <script src="lib/qrcode.js"></script>
   <script src="common.js"></script>
   <script src="options.js"></script>
 </body>
