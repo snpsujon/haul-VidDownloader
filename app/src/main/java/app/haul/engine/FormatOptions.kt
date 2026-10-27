@@ -2,6 +2,7 @@ package app.haul.engine
 
 import app.haul.data.AudioFormat
 import app.haul.data.MediaType
+import java.util.Locale
 
 /** A quality row in the Video tab of the format picker. */
 data class VideoChoice(
@@ -20,6 +21,13 @@ data class AudioChoice(
     val sizeBytes: Long?,
     val selector: String,
     val badge: String? = null,
+)
+
+/** One spoken language among a video's audio streams. */
+data class AudioTrack(
+    val language: String,     // yt-dlp language code, e.g. "en-US"
+    val label: String,        // "English (United States)"
+    val original: Boolean,
 )
 
 /** What the engine needs to run one download. Stored on the queue row. */
@@ -41,11 +49,27 @@ object FormatOptions {
 
     private val qualityNames = mapOf(4320 to "8K", 2160 to "4K")
 
-    fun videoChoices(info: MediaInfo, container: String): List<VideoChoice> {
+    /** The audio languages on offer, original first. Empty unless there are at least two. */
+    fun audioTracks(info: MediaInfo): List<AudioTrack> {
+        val byLanguage = info.formats.filter { it.hasAudio && it.language.isNotEmpty() }.groupBy { it.language }
+        if (byLanguage.size < 2) return emptyList()
+        return byLanguage.map { (code, fs) ->
+            AudioTrack(code, languageName(code), fs.any { it.languagePreference >= 10 || it.note.contains("original", ignoreCase = true) })
+        }.sortedWith(compareByDescending<AudioTrack> { it.original }.thenBy { it.label })
+    }
+
+    fun languageName(code: String): String {
+        val name = Locale.forLanguageTag(code).displayName
+        return if (name.isBlank()) code else name.replaceFirstChar { it.titlecase() }
+    }
+
+    /** [language] limits the audio to that track; null takes any. */
+    fun videoChoices(info: MediaInfo, container: String, language: String? = null): List<VideoChoice> {
         val d = info.durationSec
         val videoOnly = info.formats.filter { it.isVideoOnly && it.height > 0 }
         val combined = info.formats.filter { it.isCombined && it.height > 0 }
-        val audio = bestAudioFor(info, container)
+        val audio = bestAudioFor(info, container, language)
+        val lf = languageFilter(language)
         val heights = (videoOnly + combined).map { it.height }.distinct().sortedDescending()
         return heights.mapNotNull { h ->
             val pick = pickVideo(videoOnly.filter { it.height == h }, container)
@@ -55,7 +79,7 @@ object FormatOptions {
                 val selector = buildString {
                     append(pick.id)
                     if (audio != null) append("+").append(audio.id)
-                    append("/").append(pick.id).append("+bestaudio")
+                    append("/").append(pick.id).append("+bestaudio").append(lf)
                     append("/best[height<=").append(h).append("]/best")
                 }
                 VideoChoice(
@@ -93,12 +117,15 @@ object FormatOptions {
             ?: choices.filter { it.height <= preferred }.maxOfOrNull { it.height }
             ?: choices.minOfOrNull { it.height }
 
-    fun audioChoices(info: MediaInfo, mp3Bitrate: Int): List<AudioChoice> {
+    fun audioChoices(info: MediaInfo, mp3Bitrate: Int, language: String? = null): List<AudioChoice> {
         val d = info.durationSec
         val list = ArrayList<AudioChoice>()
+        val lf = languageFilter(language)
         val mp3Size = if (d > 0) d.toLong() * mp3Bitrate * 1000 / 8 else null
-        list += AudioChoice(AudioFormat.MP3, "PLAYS EVERYWHERE · RE-ENCODED", mp3Size, "bestaudio/best")
-        val m4a = info.formats.filter { it.isAudioOnly && (it.ext == "m4a" || it.acodec.startsWith("mp4a")) }
+        val mp3Selector = if (lf.isEmpty()) "bestaudio/best" else "bestaudio$lf/bestaudio/best"
+        list += AudioChoice(AudioFormat.MP3, "PLAYS EVERYWHERE · RE-ENCODED", mp3Size, mp3Selector)
+        val audio = audioIn(info, language)
+        val m4a = audio.filter { (it.ext == "m4a" || it.acodec.startsWith("mp4a")) }
             .maxByOrNull { it.abr.takeIf { a -> a > 0 } ?: it.tbr }
         if (m4a != null) {
             val k = kbps(m4a)
@@ -106,11 +133,11 @@ object FormatOptions {
                 AudioFormat.M4A,
                 "AAC ${if (k > 0) "${k}K · " else ""}ORIGINAL, NO RE-ENCODE",
                 m4a.size(d),
-                "${m4a.id}/bestaudio[ext=m4a]/bestaudio",
+                "${m4a.id}/bestaudio[ext=m4a]$lf/bestaudio",
                 badge = "FASTEST",
             )
         }
-        val opus = info.formats.filter { it.isAudioOnly && it.acodec.startsWith("opus") }
+        val opus = audio.filter { it.acodec.startsWith("opus") }
             .maxByOrNull { it.abr.takeIf { a -> a > 0 } ?: it.tbr }
         if (opus != null) {
             val k = kbps(opus)
@@ -118,7 +145,7 @@ object FormatOptions {
                 AudioFormat.OPUS,
                 "${if (k > 0) "${k}K · " else ""}ORIGINAL, SMALLEST",
                 opus.size(d),
-                "${opus.id}/bestaudio[acodec=opus]/bestaudio",
+                "${opus.id}/bestaudio[acodec=opus]$lf/bestaudio",
             )
         }
         return list
@@ -254,8 +281,14 @@ object FormatOptions {
 
     // Helpers ---------------------------------------------------------------------------------
 
-    private fun bestAudioFor(info: MediaInfo, container: String): Fmt? {
-        val audio = info.formats.filter { it.isAudioOnly }
+    /** Audio-only formats, limited to [language] when it is set. */
+    fun audioIn(info: MediaInfo, language: String?): List<Fmt> =
+        info.formats.filter { it.isAudioOnly && (language == null || it.language == language) }
+
+    private fun languageFilter(language: String?): String = language?.let { "[language=$it]" } ?: ""
+
+    private fun bestAudioFor(info: MediaInfo, container: String, language: String?): Fmt? {
+        val audio = audioIn(info, language)
         val score: (Fmt) -> Double = { it.abr.takeIf { a -> a > 0 } ?: it.tbr }
         val preferred = if (container == "webm") audio.filter { it.acodec.startsWith("opus") || it.ext == "webm" }
         else audio.filter { it.ext == "m4a" || it.acodec.startsWith("mp4a") }

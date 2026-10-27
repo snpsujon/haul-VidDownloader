@@ -73,4 +73,26 @@ class FormatOptionsTest {
         assertEquals(false, a.embedCover)
         assertNotNull(a.codecs)
     }
+    @Test fun audioLanguages() {
+        val json = """
+            {"title": "Dubbed", "duration": 100, "formats": [
+              {"format_id": "137", "ext": "mp4", "vcodec": "avc1.640028", "acodec": "none", "height": 1080, "tbr": 2000},
+              {"format_id": "140-0", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 129,
+               "language": "hi", "language_preference": -1, "format_note": "Hindi, medium"},
+              {"format_id": "140-1", "ext": "m4a", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 129,
+               "language": "en", "language_preference": 10, "format_note": "English original (default), medium"}
+            ]}
+        """
+        val dubbed = MediaInfo.parse(json, "https://youtube.com/watch?v=x")
+        val tracks = FormatOptions.audioTracks(dubbed)
+        assertEquals(listOf("en", "hi"), tracks.map { it.language })
+        assertTrue(tracks[0].original)
+
+        val hindi = FormatOptions.videoChoices(dubbed, "mp4", "hi").first()
+        assertTrue(hindi.selector.startsWith("137+140-0/137+bestaudio[language=hi]/"))
+        val m4a = FormatOptions.audioChoices(dubbed, 320, "hi").first { it.format == AudioFormat.M4A }
+        assertTrue(m4a.selector.startsWith("140-0/"))
+        // A single-language video offers no picker.
+        assertTrue(FormatOptions.audioTracks(info).isEmpty())
+    }
 }

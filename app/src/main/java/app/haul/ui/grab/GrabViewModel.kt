@@ -12,6 +12,7 @@ import app.haul.data.AppSettings
 import app.haul.data.AudioFormat
 import app.haul.data.MediaType
 import app.haul.engine.AudioChoice
+import app.haul.engine.AudioTrack
 import app.haul.engine.EngineException
 import app.haul.engine.Errors
 import app.haul.engine.Fmt
@@ -60,6 +61,10 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
     var metaTitle by mutableStateOf("")
     var metaArtist by mutableStateOf("")
     var embedCover by mutableStateOf(true)
+    var audioTracks by mutableStateOf<List<AudioTrack>>(emptyList())
+        private set
+    var audioLanguage by mutableStateOf<String?>(null)
+        private set
 
     // All formats
     var allFilter by mutableStateOf(0)
@@ -158,11 +163,13 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun prepareSheet(info: MediaInfo, s: AppSettings) {
         container = s.videoContainer
-        videoChoices = FormatOptions.videoChoices(info, container)
+        audioTracks = FormatOptions.audioTracks(info)
+        audioLanguage = audioTracks.firstOrNull()?.language
+        videoChoices = FormatOptions.videoChoices(info, container, audioLanguage)
         recommendedHeight = FormatOptions.recommendedHeight(videoChoices)
         selectedHeight = FormatOptions.defaultHeight(videoChoices, s.videoHeight)
         mp3Bitrate = s.mp3Bitrate
-        audioChoices = FormatOptions.audioChoices(info, mp3Bitrate)
+        audioChoices = FormatOptions.audioChoices(info, mp3Bitrate, audioLanguage)
         audioFormat = audioChoices.firstOrNull { it.format == s.audioFormat }?.format ?: AudioFormat.MP3
         embedCover = s.embedCover
         metaTitle = info.title
@@ -176,14 +183,22 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
         val i = info ?: return
         container = c
         val keep = selectedHeight
-        videoChoices = FormatOptions.videoChoices(i, c)
+        videoChoices = FormatOptions.videoChoices(i, c, audioLanguage)
         recommendedHeight = FormatOptions.recommendedHeight(videoChoices)
         selectedHeight = videoChoices.firstOrNull { it.height == keep }?.height ?: recommendedHeight
     }
 
     fun setBitrate(b: Int) {
         mp3Bitrate = b
-        info?.let { audioChoices = FormatOptions.audioChoices(it, b) }
+        info?.let { audioChoices = FormatOptions.audioChoices(it, b, audioLanguage) }
+    }
+
+    fun setLanguage(language: String) {
+        val i = info ?: return
+        audioLanguage = language
+        setContainerTo(container)
+        audioChoices = FormatOptions.audioChoices(i, mp3Bitrate, language)
+        if (audioChoices.none { it.format == audioFormat }) audioFormat = AudioFormat.MP3
     }
 
     val selectedVideo: VideoChoice? get() = videoChoices.firstOrNull { it.height == selectedHeight }
@@ -242,7 +257,7 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun bestAudioId(): String? =
-        info?.formats?.filter { it.isAudioOnly }?.maxByOrNull { it.abr.takeIf { a -> a > 0 } ?: it.tbr }?.id
+        info?.let { FormatOptions.audioIn(it, audioLanguage) }?.maxByOrNull { it.abr.takeIf { a -> a > 0 } ?: it.tbr }?.id
 
     fun customRequestPreview() = info?.let { i ->
         FormatOptions.customRequest(

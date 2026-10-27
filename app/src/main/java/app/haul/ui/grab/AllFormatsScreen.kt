@@ -60,6 +60,7 @@ fun AllFormatsScreen(vm: GrabViewModel, onBack: () -> Unit, onQueued: () -> Unit
         3 -> all.filter { it.isCombined }
         else -> all
     }
+    val multiLanguage = FormatOptions.audioTracks(info).isNotEmpty()
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Column(Modifier.fillMaxSize()) {
         TitleBar("All formats", onBack) {
@@ -79,7 +80,7 @@ fun AllFormatsScreen(vm: GrabViewModel, onBack: () -> Unit, onQueued: () -> Unit
         LazyColumn(Modifier.weight(1f)) {
             items(filtered, key = { it.id }) { f ->
                 val sel = f.id == vm.pickedVideo || f.id == vm.pickedAudio
-                FormatRow(f, info.durationSec, sel) { vm.pick(f) }
+                FormatRow(f, info.durationSec, sel, multiLanguage) { vm.pick(f) }
             }
         }
         val req = vm.customRequestPreview()
@@ -142,7 +143,7 @@ private fun HeaderRow() {
 }
 
 @Composable
-private fun FormatRow(f: Fmt, duration: Int, selected: Boolean, onClick: () -> Unit) {
+private fun FormatRow(f: Fmt, duration: Int, selected: Boolean, showLanguage: Boolean, onClick: () -> Unit) {
     val c = Haul.colors
     val (kind, tag) = when {
         f.isCombined -> TagKind.Neutral to "A+V"
@@ -159,7 +160,8 @@ private fun FormatRow(f: Fmt, duration: Int, selected: Boolean, onClick: () -> U
         f.isAudioOnly -> f.acodec.substringBefore('.')
         else -> f.vcodec.substringBefore('.')
     }
-    val spec = listOfNotNull(codec.takeIf { it.isNotBlank() && it != "unknown" }, f.ext, f.fps.takeIf { it > 0 && f.hasVideo }?.toString())
+    val language = f.language.uppercase().takeIf { showLanguage && f.hasAudio && it.isNotEmpty() }
+    val spec = listOfNotNull(language, codec.takeIf { it.isNotBlank() && it != "unknown" }, f.ext, f.fps.takeIf { it > 0 && f.hasVideo }?.toString())
         .joinToString(" · ")
     Column {
         Row(

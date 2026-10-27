@@ -17,6 +17,8 @@ data class Fmt(
     val filesize: Long?,
     val note: String,
     val dynamicRange: String,
+    val language: String = "",          // "en", "hi"; empty when the site gives none
+    val languagePreference: Int = -1,   // yt-dlp ranks the original audio highest (10)
 ) {
     val hasVideo: Boolean get() = vcodec.isNotEmpty() && vcodec != "none"
     val hasAudio: Boolean get() = acodec.isNotEmpty() && acodec != "none"
@@ -176,6 +178,8 @@ data class MediaInfo(
                 filesize = size,
                 note = f.optString("format_note"),
                 dynamicRange = f.optString("dynamic_range", "SDR"),
+                language = f.optStringOrNull("language") ?: "",
+                languagePreference = f.optInt("language_preference", -1),
             )
         }
 

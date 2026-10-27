@@ -2,6 +2,7 @@ package app.haul.ui.grab
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -71,6 +72,7 @@ fun FormatSheet(
             )
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            if (vm.audioTracks.isNotEmpty()) AudioLanguage(vm)
             if (vm.tab == MediaType.VIDEO && hasVideo) VideoTab(vm, onAllFormats) else AudioTab(vm)
         }
         Spacer(Modifier.height(12.dp))
@@ -114,6 +116,24 @@ fun MediaHeader(info: MediaInfo, onClose: (() -> Unit)?) {
         }
         if (onClose != null) {
             IconButton44(HaulIcon.Close, "Close", onClose, Modifier.offset(x = 12.dp, y = (-10).dp), color = c.textMid, iconSize = 20.dp)
+        }
+    }
+}
+
+/** Shown when the video has more than one spoken language. Applies to both tabs. */
+@Composable
+private fun AudioLanguage(vm: GrabViewModel) {
+    Spacer(Modifier.height(20.dp))
+    SectionLabel("Audio language")
+    Spacer(Modifier.height(10.dp))
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        vm.audioTracks.forEach { t ->
+            FilterChip(
+                if (t.original) "${t.label} · Original" else t.label,
+                vm.audioLanguage == t.language,
+                { vm.setLanguage(t.language) },
+                hPad = 12.dp, height = 32.dp,
+            )
         }
     }
 }
