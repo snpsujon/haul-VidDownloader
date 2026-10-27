@@ -165,3 +165,9 @@ footer p{margin:0}
 .sitelist li{break-inside:avoid;margin:0 0 4px}
 .login{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--low);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
 p.lead a{color:inherit}
+
+.sitebanner{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 48px 10px 16px;position:relative;font-size:14px;line-height:20px;text-align:center;background:color-mix(in srgb,var(--signal) 14%,var(--ground));color:var(--hi);border-bottom:1px solid color-mix(in srgb,var(--signal) 35%,transparent)}
+.sitebanner.warn{background:color-mix(in srgb,#e0a100 16%,var(--ground));border-bottom-color:color-mix(in srgb,#e0a100 40%,transparent)}
+.sitebanner.bad{background:color-mix(in srgb,var(--bad) 16%,var(--ground));border-bottom-color:color-mix(in srgb,var(--bad) 40%,transparent)}
+.sitebanner button{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:0;background:none;color:var(--mid);font-size:20px;line-height:1;cursor:pointer;border-radius:8px}
+.sitebanner button:hover{color:var(--hi);background:color-mix(in srgb,var(--hi) 8%,transparent)}

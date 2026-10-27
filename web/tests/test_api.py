@@ -387,22 +387,30 @@ def test_pages_and_scripts_are_revalidated(client):
         assert client.get(path).headers.get("cache-control") == "no-cache", path
 
 
+def elf(machine: int, tag: bytes) -> bytes:
+    return b"\x7fELF\x02\x01\x01" + b"\0" * 11 + machine.to_bytes(2, "little") + b"\0" * 20 + tag
+
+
+LINUX_X64 = elf(0x3E, b"x64 haul-helper/0.4.0 ")
+LINUX_ARM = elf(0xB7, b"arm")
+
+
 def test_helper_builds_and_install_script(client, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
     h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
     assert client.get("/get/helper/mac").status_code == 404
     r = client.post("/api/admin/releases/helper", headers=h, data={"version": "0.4.0"},
                     files={"file": ("haul-helper.exe", b"MZwin"), "mac": ("haul-helper-mac", b"\xcf\xfa\xed\xfemac"),
-                           "linux-x64": ("haul-helper-linux-x64", b"\x7fELFx64")})
+                           "linux-x64": ("haul-helper-linux-x64", LINUX_X64)})
     assert r.status_code == 200, r.text
     # A later upload of one build keeps the others.
     client.post("/api/admin/releases/helper", headers=h, data={"version": "0.4.1"},
-                files={"linux-arm64": ("haul-helper-linux-arm64", b"\x7fELFarm")})
+                files={"linux-arm64": ("haul-helper-linux-arm64", LINUX_ARM)})
     rel = client.get("/api/releases").json()["helper"]
     assert rel["version"] == "0.4.1" and set(rel["builds"]) == {"windows", "mac", "linux-x64", "linux-arm64"}
     mac = client.get("/get/helper/mac")
     assert mac.content == b"\xcf\xfa\xed\xfemac" and mac.headers["content-type"] == "application/octet-stream"
-    assert client.get("/get/helper/linux-arm64").content == b"\x7fELFarm"
+    assert client.get("/get/helper/linux-arm64").content == LINUX_ARM
     assert client.get("/get/helper").content == b"MZwin"
     assert client.get("/get/helper/windows-xp").status_code == 404
     bad = client.post("/api/admin/releases/helper", headers=h, files={"mac": ("haul-helper.exe", b"MZ")})
@@ -444,3 +452,274 @@ def test_upload_in_pieces_then_publish(client, monkeypatch):
     assert bad.status_code == 400
     assert client.put(f"/api/admin/releases/uploads/{'a' * 32}", content=b"x").status_code == 401
     client.delete("/api/admin/releases/android", headers=h)
+
+
+def test_helper_drop_reads_system_and_version(client, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+    client.delete("/api/admin/releases/helper", headers=h)
+    # Any names: the system comes from each file's header, the version from its user agent.
+    r = client.post("/api/admin/releases/helper", headers=h, files=[
+        ("helpers", ("a", LINUX_X64)), ("helpers", ("b", LINUX_ARM)),
+        ("helpers", ("c", b"\xca\xfe\xba\xbe mac haul-helper/0.4.0")), ("helpers", ("setup.exe", b"MZ haul-helper/0.4.0"))])
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True, "version": "0.4.0", "systems": ["Windows", "Mac", "Linux (x64)", "Linux (ARM64)"]}
+    rel = client.get("/api/releases").json()["helper"]
+    assert rel["version"] == "0.4.0" and set(rel["builds"]) == {"windows", "mac", "linux-x64", "linux-arm64"}
+    assert client.get("/get/helper/linux-x64").content == LINUX_X64
+    # Not a program, two files for one system, and mixed versions are refused.
+    assert client.post("/api/admin/releases/helper", headers=h, files=[("helpers", ("x.txt", b"hello"))]).status_code == 400
+    two = client.post("/api/admin/releases/helper", headers=h, files=[("helpers", ("a", LINUX_X64)), ("helpers", ("b", LINUX_X64))])
+    assert two.status_code == 400 and "Two of these" in two.json()["detail"]
+    mixed = client.post("/api/admin/releases/helper", headers=h, files=[
+        ("helpers", ("a", LINUX_X64)), ("helpers", ("w.exe", b"MZ haul-helper/0.5.0"))])
+    assert mixed.status_code == 400 and "different helper versions" in mixed.json()["detail"]
+    client.delete("/api/admin/releases/helper", headers=h)
+
+
+def test_admin_log_pages_and_play(client, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from app import store
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+    store.clear()
+    for i in range(7):
+        store.log(job=f"j{i}", url=f"https://example.com/{i}", site="example", status="done", ip="1.2.3.4")
+    r = client.get("/api/admin/requests?limit=3&offset=6", headers=h).json()
+    assert r["total"] == 7 and len(r["requests"]) == 1
+    assert client.get("/api/admin/requests?q=example.com/3", headers=h).json()["total"] == 1
+
+    f = tmp_path / "clip.mp4"
+    f.write_bytes(b"0123456789")
+    main.app.state.jobs.jobs["playme"] = SimpleNamespace(status="done", file=f)
+    try:
+        assert client.get("/api/admin/jobs/playme/file").status_code == 401
+        r = client.get("/api/admin/jobs/playme/file", headers={**h, "Range": "bytes=2-4"})
+        assert r.status_code == 206 and r.content == b"234"
+        assert r.headers["content-disposition"].startswith("inline")
+        tok = h["X-Admin-Token"]
+        assert client.get(f"/api/admin/jobs/playme/file?admin_token={tok}").content == b"0123456789"
+        assert client.get("/api/admin/jobs/nope/file", headers=h).status_code == 404
+    finally:
+        main.app.state.jobs.jobs.pop("playme", None)
+
+
+def ext_zip(manifest: dict, folder: str = "") -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(folder + "manifest.json", json.dumps(manifest))
+        z.writestr(folder + "popup.html", "<p>hi</p>")
+    return buf.getvalue()
+
+
+def test_extension_per_browser(client, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+    client.delete("/api/admin/releases/extension", headers=h)
+    chrome = ext_zip({"name": "Haul", "version": "2.0.0", "manifest_version": 3}, "haul/")
+    fox = ext_zip({"name": "Haul", "version": "2.0.1", "browser_specific_settings": {"gecko": {"id": "haul@x"}}})
+    r = client.post("/api/admin/releases/extension", headers=h,
+                    data={"store_chrome": "https://chromewebstore.google.com/detail/abc", "store_edge": "",
+                          "store_firefox": "", "store_opera": "", "all_stores": "1"},
+                    files=[("packages", ("haul.zip", chrome)), ("packages", ("haul-ff.zip", fox))])
+    assert r.status_code == 200, r.text
+    assert r.json()["version"] == "2.0.0" and r.json()["packages"] == ["Chrome .zip 2.0.0", "Firefox file 2.0.1"]
+    x = client.get("/api/releases").json()["extension"]
+    assert x["stores"] == {"chrome": "https://chromewebstore.google.com/detail/abc"}
+    assert x["store_url"].endswith("/abc")
+    assert x["builds"]["chromium"]["version"] == "2.0.0" and x["builds"]["firefox"]["version"] == "2.0.1"
+    assert client.get("/get/extension").content == chrome
+    assert client.get("/get/extension/firefox").content == fox
+
+    # Wrong store in the wrong box, and things that aren't extensions.
+    bad = client.post("/api/admin/releases/extension", headers=h, data={"store_edge": "https://addons.mozilla.org/x"})
+    assert bad.status_code == 400 and "Edge Add-ons box" in bad.json()["detail"]
+    assert client.post("/api/admin/releases/extension", headers=h,
+                       files=[("packages", ("x.zip", ext_zip({"a": 1})[:10]))]).status_code == 400
+    nomani = io.BytesIO()
+    with zipfile.ZipFile(nomani, "w") as z:
+        z.writestr("readme.txt", "x")
+    assert "manifest.json" in client.post("/api/admin/releases/extension", headers=h,
+                                          files=[("packages", ("x.zip", nomani.getvalue()))]).json()["detail"]
+
+    # Fields left off the form keep their value; an empty field removes the link.
+    client.post("/api/admin/releases/extension", headers=h, data={"store_firefox": "https://addons.mozilla.org/firefox/addon/haul/"})
+    x = client.get("/api/releases").json()["extension"]
+    assert set(x["stores"]) == {"chrome", "firefox"} and "firefox" in x["builds"]
+    client.post("/api/admin/releases/extension", headers=h, data={"store_chrome": "", "store_firefox": "https://addons.mozilla.org/firefox/addon/haul/", "all_stores": "1"})
+    assert set(client.get("/api/releases").json()["extension"]["stores"]) == {"firefox"}
+
+    assert client.delete("/api/admin/releases/extension/package/firefox", headers=h).status_code == 200
+    assert client.get("/get/extension/firefox").status_code == 404
+    client.delete("/api/admin/releases/extension/package/chromium", headers=h)
+    assert client.get("/api/releases").json()["extension"]["builds"] == {}
+    assert client.delete("/api/admin/releases/extension/store/nope", headers=h).status_code == 404
+    client.delete("/api/admin/releases/extension/store/firefox", headers=h)
+    assert client.get("/api/releases").json()["extension"] is None
+
+
+def test_other_files_many_and_retitle(client, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+    r = client.post("/api/admin/releases/files", headers=h, data={"titles": ["Install guide", ""]},
+                    files=[("files", ("guide.pdf", b"PDF")), ("files", ("old.apk", b"APK"))])
+    assert r.status_code == 200 and r.json()["names"] == ["guide.pdf", "old.apk"]
+    pub = {f["name"]: f for f in client.get("/api/releases").json()["files"]}
+    assert pub["guide.pdf"]["title"] == "Install guide" and pub["old.apk"]["title"] == "old.apk"
+    assert client.patch("/api/admin/releases/files/old.apk", headers=h, json={"title": "Version 1.0"}).status_code == 200
+    pub = {f["name"]: f for f in client.get("/api/releases").json()["files"]}
+    assert pub["old.apk"]["title"] == "Version 1.0"
+    assert client.patch("/api/admin/releases/files/nope", headers=h, json={"title": "x"}).status_code == 404
+    assert client.patch("/api/admin/releases/files/old.apk", json={"title": "x"}).status_code == 401
+    for n in ("guide.pdf", "old.apk"):
+        client.delete(f"/api/admin/releases/files/{n}", headers=h)
+
+
+def admin_headers(client, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    return {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+
+
+def test_site_settings_and_banner(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    r = client.put("/api/admin/settings", headers=h, json={"site_name": "Grab<It>", "banner": "Slow today", "banner_level": "warn",
+                                                           "contact_email": "help@example.com", "daily_limit": 0})
+    assert r.status_code == 200
+    assert client.get("/api/site").json() == {"site_name": "Grab<It>", "banner": "Slow today", "banner_level": "warn",
+                                               "contact_email": "help@example.com"}
+    assert client.get("/api/health").json()["contact_email"] == "help@example.com"
+    page = client.get("/").text
+    assert "<title>Grab&lt;It&gt;:" in page and 'og:site_name" content="Grab&lt;It&gt;"' in page and "<It>" not in page.split("</head>")[0]
+    assert client.put("/api/admin/settings", headers=h, json={"contact_email": "nope"}).status_code == 400
+    assert client.put("/api/admin/settings", headers=h, json={"banner_level": "loud"}).status_code == 422
+    client.put("/api/admin/settings", headers=h, json={})
+    assert client.get("/api/site").json()["site_name"] == "Haul"
+    assert "<title>Haul:" in client.get("/").text
+
+
+def test_blocking_and_daily_limit(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    from app import store
+    store.clear()
+    monkeypatch.setattr(config, "TRUST_PROXY_HEADERS", True)
+    me, them = {"X-Forwarded-For": "9.9.9.9"}, {"X-Forwarded-For": "5.6.7.8"}
+    assert client.post("/api/admin/bans", headers={**h, **me}, json={"ip": "9.9.9.0/24"}).status_code == 400  # own address
+    assert client.post("/api/admin/bans", headers={**h, **me}, json={"ip": "not an ip"}).status_code == 400
+    assert client.post("/api/admin/bans", headers={**h, **me}, json={"ip": "5.6.7.0/24", "note": "spam"}).status_code == 200
+    r = client.post("/api/info", json={"url": "https://www.youtube.com/watch?v=x"}, headers=them)
+    assert r.status_code == 403 and "blocked" in r.json()["detail"]
+    assert client.post("/api/jobs", json={"url": "https://www.youtube.com/watch?v=x"}, headers=them).status_code == 403
+    assert client.post("/api/info", json={"url": "https://www.youtube.com/watch?v=x"}, headers=me).status_code == 200
+    log = client.get("/api/admin/requests", headers=h).json()
+    assert client.delete("/api/admin/bans/5.6.7.0/24", headers=h).status_code == 200
+    assert client.delete("/api/admin/bans/5.6.7.0/24", headers=h).status_code == 404
+    assert client.post("/api/info", json={"url": "https://www.youtube.com/watch?v=x"}, headers=them).status_code == 200
+
+    client.put("/api/admin/settings", headers=h, json={"daily_limit": 2})
+    for _ in range(2):
+        assert client.post("/api/jobs", json={"url": "https://www.youtube.com/watch?v=x"}, headers={**them, "CF-IPCountry": "BD"}).status_code == 201
+    r = client.post("/api/jobs", json={"url": "https://www.youtube.com/watch?v=x"}, headers=them)
+    assert r.status_code == 429 and "2 downloads a day" in r.json()["detail"]
+    assert client.post("/api/jobs", json={"url": "https://www.youtube.com/watch?v=x"}, headers=me).status_code == 201
+    rows = client.get("/api/admin/requests", headers=h).json()["requests"]
+    assert {r["country"] for r in rows if r["ip"] == "5.6.7.8"} == {"BD"} and not any(r["banned"] for r in rows)
+    client.put("/api/admin/settings", headers=h, json={})
+    assert log["total"] == 0
+
+
+def test_stats_and_install_counts(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    from app import store
+    client.delete("/api/admin/releases/extension", headers=h)
+    client.post("/api/admin/releases/extension", headers=h,
+                data={"store_chrome": "https://chromewebstore.google.com/detail/abc"},
+                files=[("packages", ("haul.zip", ext_zip({"version": "2.0.0"})))])
+    x = client.get("/api/releases").json()["extension"]
+    assert x["store_links"]["chrome"].endswith("/get/extension/store/chrome")
+    assert client.get("/get/extension/store/chrome", follow_redirects=False).headers["location"].endswith("/abc")
+    assert client.get("/get/extension/store/edge", follow_redirects=False).status_code == 404
+    before = client.get("/api/admin/stats?days=7", headers=h).json()["installs"]["totals"].get("extension", 0)
+    client.get("/get/extension", headers={"CF-IPCountry": "IN"})
+    client.get("/get/extension", headers={"Range": "bytes=100-"})  # a resumed piece doesn't count
+    s = client.get("/api/admin/stats?days=7", headers=h).json()
+    assert s["installs"]["totals"]["extension"] == before + 1 and len(s["installs"]["daily"]) == 7
+    assert {d["detail"] for d in s["installs"]["detail"]} >= {"chrome", "zip"}
+    assert {"sites", "countries", "sources", "kinds"} <= set(s)
+
+
+def test_alert_settings_and_sending(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    from app import notify, upkeep
+    r = client.put("/api/admin/settings/alerts", headers=h, json={"telegram_token": "123:abc", "telegram_chat": "42", "disk": False})
+    a = r.json()["alerts"]
+    assert a["telegram_token"] is True and a["telegram_chat"] == "42" and a["disk"] is False
+    # Leaving the token out keeps it; the real one is never sent back.
+    a = client.put("/api/admin/settings/alerts", headers=h, json={"telegram_chat": "43"}).json()["alerts"]
+    assert a["telegram_token"] is True and "123:abc" not in json.dumps(client.get("/api/admin/settings", headers=h).json())
+    sent = []
+    monkeypatch.setattr(notify, "telegram", lambda text, token, chat: sent.append((text, token, chat)))
+    r = client.post("/api/admin/settings/alerts/test", headers=h).json()
+    assert r["results"] == [{"to": "Telegram", "ok": True}] and sent[-1][1:] == ("123:abc", "43")
+    problems = [{"level": "bad", "kind": "cookies", "key": "cookies-bad", "text": "Cookies broke"},
+                {"level": "bad", "kind": "disk", "key": "disk-full", "text": "Disk full"}]
+    monkeypatch.setattr(upkeep, "alerts", lambda: problems)
+    assert [x["key"] for x in upkeep.send_alerts()] == ["cookies-bad"]  # disk alerts are off
+    assert "Cookies broke" in sent[-1][0] and "Disk full" not in sent[-1][0]
+    assert upkeep.send_alerts() == []  # not again until 12 hours pass
+    def boom(*a):
+        raise RuntimeError("Telegram said: Unauthorized")
+    monkeypatch.setattr(notify, "telegram", boom)
+    assert client.post("/api/admin/settings/alerts/test", headers=h).json()["results"][0] == \
+        {"to": "Telegram", "ok": False, "error": "Telegram said: Unauthorized"}
+    client.put("/api/admin/settings/alerts", headers=h, json={"telegram_token": "", "telegram_chat": ""})
+    assert client.post("/api/admin/settings/alerts/test", headers=h).status_code == 400
+
+
+def test_backup_and_one_click_update(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    client.put("/api/admin/settings", headers=h, json={"site_name": "Backup test"})
+    client.post("/api/admin/releases/files", headers=h, files={"file": ("guide.pdf", b"PDF")})
+    r = client.get("/api/admin/backup", headers=h)
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    names = set(z.namelist())
+    assert {"haul.db", "settings.json", "releases/releases.json", "README.txt"} <= names and "releases/files/guide.pdf" not in names
+    assert json.loads(z.read("settings.json"))["site_name"] == "Backup test"
+    z = zipfile.ZipFile(io.BytesIO(client.get("/api/admin/backup?releases=true", headers=h).content))
+    assert "releases/files/guide.pdf" in z.namelist()
+    assert client.get("/api/admin/backup").status_code == 401
+    assert not list(config.DATA_DIR.glob("haul-backup-*"))
+    client.put("/api/admin/settings", headers=h, json={})
+    client.delete("/api/admin/releases/files/guide.pdf", headers=h)
+
+    restarted = []
+    monkeypatch.setattr(engine, "update_ytdlp", lambda: {"installed": "2099.1.1", "restart_needed": True})
+    monkeypatch.setattr(engine, "restart_soon", lambda: restarted.append(1))
+    assert client.post("/api/admin/ytdlp/update?restart=true", headers=h).json()["restart"] == "now" and restarted
+
+
+def test_smtp_settings_and_test_per_channel(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    from app import notify, settings
+    sent = []
+    monkeypatch.setattr(notify, "telegram", lambda text, token, chat: sent.append("tg"))
+    monkeypatch.setattr(notify, "email", lambda text, a: sent.append(("mail", a["smtp_security"], a["email_name"])))
+    a = client.put("/api/admin/settings/alerts", headers=h, json={
+        "telegram_token": "123456:secret-token", "telegram_chat": "1", "smtp_host": "smtp.example.com", "smtp_port": 465,
+        "smtp_security": "ssl", "smtp_user": "me", "smtp_password": "hunter2-long", "email_from": "a@example.com",
+        "email_name": "Site alerts", "email_to": "b@example.com"}).json()["alerts"]
+    assert a["smtp_password"] is True and a["smtp_password_hint"] == "***long" and a["telegram_token_hint"] == "***oken"
+    assert client.put("/api/admin/settings/alerts", headers=h, json={"smtp_security": "weird"}).status_code == 422
+    r = client.post("/api/admin/settings/alerts/test?channel=email", headers=h).json()
+    assert r["results"] == [{"to": "Email", "ok": True}] and sent == [("mail", "ssl", "Site alerts")]
+    assert client.post("/api/admin/settings/alerts/test?channel=telegram", headers=h).json()["results"] == [{"to": "Telegram", "ok": True}]
+    assert sent[-1] == "tg" and len(sent) == 2
+    client.put("/api/admin/settings/alerts", headers=h, json={"smtp_host": ""})
+    assert "SMTP host" in client.post("/api/admin/settings/alerts/test?channel=email", headers=h).json()["detail"]
+    # The first version's checkbox still loads.
+    settings.save({"alerts": {"smtp_ssl": True, "smtp_security": None}})
+    raw = json.loads((config.DATA_DIR / "settings.json").read_text())
+    raw["alerts"].pop("smtp_security")
+    (config.DATA_DIR / "settings.json").write_text(json.dumps(raw))
+    assert settings.load()["alerts"]["smtp_security"] == "ssl"
+    client.put("/api/admin/settings/alerts", headers=h, json={"telegram_token": "", "smtp_password": "", "telegram_chat": "", "email_to": ""})

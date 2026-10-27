@@ -9,7 +9,7 @@ services:
       HAUL_PUBLIC_URL: "https://stackforge-pro.xyz"
       HAUL_CONTACT_EMAIL: "hello@stackforge-pro.xyz"  # shown on the Contact page
       # HAUL_API_KEYS: "change-me"          # turn on to require an API key
-      # HAUL_TRUST_PROXY: "1"                # when behind Caddy/nginx/Cloudflare
+      HAUL_TRUST_PROXY: "1"                  # real visitor addresses from Cloudflare/nginx (needed for blocking and limits)
     volumes:
       - haul-data:/data
     restart: unless-stopped

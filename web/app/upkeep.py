@@ -8,7 +8,7 @@ import shutil
 import threading
 import time
 
-from . import config, cookies, engine, store
+from . import config, cookies, engine, notify, settings, store
 
 log = logging.getLogger("haul.upkeep")
 _stop = threading.Event()
@@ -39,29 +39,29 @@ def alerts() -> list[dict]:
     c = cookies.summary()
     if c.get("present"):
         if c.get("ok") is False or c.get("expired"):
-            out.append({"level": "bad", "text": "YouTube cookies stopped working. Export fresh ones and upload them below."})
+            out.append({"level": "bad", "kind": "cookies", "key": "cookies-bad", "text": "YouTube cookies stopped working. Export fresh ones and upload them below."})
         elif c.get("expires") and c["expires"] < time.time() + 3 * 86400:
-            out.append({"level": "warn", "text": "YouTube cookies expire in less than 3 days. Upload fresh ones soon."})
+            out.append({"level": "warn", "kind": "cookies", "key": "cookies-expiring", "text": "YouTube cookies expire in less than 3 days. Upload fresh ones soon."})
 
     yt = store.last_results("Youtube%", 10)
     if len(yt) >= 5 and yt[:5].count("error") == 5:
-        out.append({"level": "bad", "text": "The last 5 YouTube downloads failed. YouTube may be blocking the server. "
+        out.append({"level": "bad", "kind": "failures", "key": "youtube-failing", "text": "The last 5 YouTube downloads failed. YouTube may be blocking the server. "
                     "Try Update yt-dlp, then restart, or upload fresh cookies."})
     for s in store.site_health(24):
         if s["site"].lower().startswith("youtube"):
             continue
         if s["total"] >= 5 and s["failed"] / s["total"] >= 0.5:
-            out.append({"level": "warn", "text": f"{s['site']}: {s['failed']} of {s['total']} downloads failed today."})
+            out.append({"level": "warn", "kind": "failures", "key": f"site-failing-{s['site']}", "text": f"{s['site']}: {s['failed']} of {s['total']} downloads failed today."})
 
     du = shutil.disk_usage(config.DATA_DIR)
     if du.free < 2 * 1024 ** 3 or du.free / du.total < 0.05:
-        out.append({"level": "bad", "text": f"Disk is almost full ({du.free / 1024 ** 3:.1f} GB free). Delete finished files below."})
+        out.append({"level": "bad", "kind": "disk", "key": "disk-full", "text": f"Disk is almost full ({du.free / 1024 ** 3:.1f} GB free). Delete finished files below."})
 
     u = state().get("update") or {}
     if u.get("error") and u.get("at", 0) > time.time() - 2 * 86400:
-        out.append({"level": "warn", "text": "The nightly yt-dlp update failed: " + u["error"]})
+        out.append({"level": "warn", "kind": "updates", "key": "update-failed", "text": "The nightly yt-dlp update failed: " + u["error"]})
     if u.get("restart_needed") and u.get("installed") != engine.versions()["yt_dlp"]:
-        out.append({"level": "warn", "text": f"yt-dlp {u['installed']} is installed but the server is still running the old one. Restart to load it."})
+        out.append({"level": "warn", "kind": "updates", "key": "restart-needed", "text": f"yt-dlp {u['installed']} is installed but the server is still running the old one. Restart to load it."})
     return out
 
 
@@ -100,10 +100,49 @@ def _seconds_until(hour: int) -> float:
     return target - time.time()
 
 
+# Sending alerts ----------------------------------------------------------------------------
+
+REMIND_HOURS = 12
+
+
+def send_alerts() -> list[dict]:
+    """Sends alerts that are new (or still there after REMIND_HOURS) to Telegram and email.
+    Returns what was sent."""
+    a = settings.load()["alerts"]
+    if not notify.configured(a):
+        return []
+    now, st = time.time(), state()
+    sent: dict = {k: v for k, v in (st.get("notified") or {}).items()}
+    current = [x for x in alerts() if a.get(x.get("kind"), True)]
+    fresh = [x for x in current if sent.get(x["key"], 0) < now - REMIND_HOURS * 3600]
+    if fresh:
+        name = settings.load()["site_name"] or "Haul"
+        text = f"{name}: " + ("a problem needs a look" if len(fresh) == 1 else f"{len(fresh)} problems need a look") + "\n\n" + \
+            "\n".join(("❗ " if x["level"] == "bad" else "⚠️ ") + x["text"] for x in fresh)
+        results = notify.send(text, a)
+        if any(r["ok"] for r in results):
+            for x in fresh:
+                sent[x["key"]] = now
+        else:
+            log.warning("couldn't send alerts: %s", results)
+    keys = {x["key"] for x in current}
+    _save(notified={k: v for k, v in sent.items() if k in keys})  # a fixed problem can alert again later
+    return fresh
+
+
 def start(jobs) -> None:
+    _stop.clear()
+
+    def watch():
+        while not _stop.wait(600):
+            try:
+                send_alerts()
+            except Exception:  # noqa: BLE001
+                log.exception("sending alerts failed")
+
+    threading.Thread(target=watch, name="haul-alerts", daemon=True).start()
     if not config.AUTO_UPDATE:
         return
-    _stop.clear()
 
     def loop():
         while not _stop.wait(_seconds_until(config.AUTO_UPDATE_HOUR)):

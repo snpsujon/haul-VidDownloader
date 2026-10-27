@@ -13,10 +13,10 @@
 <link rel="stylesheet" href="admin.css">
 </head>
 <body>
-<div class="wrap wide">
+<div class="wrap wide" id="outer">
   <div class="top">
     <a class="mark" href="./">haul<span>.</span></a>
-    <nav class="nav"><a href="./">Downloader</a><a href="#" id="logout" class="hidden">Sign out</a></nav>
+    <nav class="nav"><a href="./">Downloader</a></nav>
   </div>
 
   <!-- Sign in -->
@@ -34,12 +34,36 @@
     <p class="lead">Set <code>HAUL_ADMIN_PASSWORD</code> on the server and restart it to use this page.</p>
   </div>
 
-  <div id="panel" class="hidden">
-    <h1>Admin</h1>
+</div>
+
+<div id="panel" class="adm hidden">
+  <aside class="side">
+    <div class="sidetop"><a class="mark" href="./">haul<span>.</span></a><span class="label">Admin</span></div>
+    <nav class="sidenav" id="sidenav">
+      <div class="navgroup">Overview</div>
+      <a href="#dashboard" data-nav="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg><span>Dashboard</span><span class="badge bad hidden" id="nav-alerts"></span></a>
+      <a href="#stats" data-nav="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Stats</span></a>
+      <a href="#jobs" data-nav="jobs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Downloads</span><span class="badge hidden" id="nav-jobs"></span></a>
+      <a href="#log" data-nav="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Request log</span></a>
+      <div class="navgroup">Publish</div>
+      <a href="#app" data-nav="app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg><span>Android app</span></a>
+      <a href="#extension" data-nav="extension"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3z"/></svg><span>Extension</span></a>
+      <a href="#helper" data-nav="helper"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>PC helper</span></a>
+      <a href="#files" data-nav="files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg><span>Other files</span></a>
+      <div class="navgroup">Settings</div>
+      <a href="#site" data-nav="site"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Site settings</span></a>
+      <a href="#blocking" data-nav="blocking"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg><span>Blocking</span><span class="badge hidden" id="nav-bans"></span></a>
+      <a href="#alerts" data-nav="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg><span>Alerts</span><span class="dot hidden" id="nav-alertsetup"></span></a>
+      <a href="#cookies" data-nav="cookies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="14" r="1"/><circle cx="15" cy="9" r="1"/></svg><span>YouTube cookies</span><span class="dot hidden" id="nav-cookies"></span></a>
+      <a href="#server" data-nav="server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg><span>Server</span></a>
+    </nav>
+    <div class="sidefoot"><a href="./" target="_blank" rel="noopener">Open the site ↗</a><a href="#" id="logout">Sign out</a></div>
+  </aside>
+  <main class="main">
+      <section class="page hidden" data-page="dashboard">
+        <header class="phead"><h1>Dashboard</h1><p class="sub">How the downloader is doing today.</p></header>
     <div id="alerts"></div>
     <div class="tiles" id="tiles"></div>
-
-    <!-- Charts -->
     <div class="card">
       <div class="chead"><div class="label">Downloads per day</div>
         <div class="seg small" role="radiogroup" aria-label="Days shown" id="range"><button type="button" data-days="14" aria-checked="true">14 days</button><button type="button" data-days="30">30 days</button></div></div>
@@ -49,7 +73,235 @@
       <div class="tablewrap"><table class="t" id="sites"><thead><tr><th>Site</th><th>Downloads</th><th>Failed</th><th style="width:40%">Failure rate</th></tr></thead><tbody></tbody></table></div>
     </div>
 
-    <!-- Cookies -->
+      </section>
+      <section class="page hidden" data-page="stats">
+        <header class="phead"><h1>Stats</h1><p class="sub">Where downloads come from, and how many people get the app, extension and helper.</p></header>
+    <div class="chead" style="margin-bottom:12px"><span></span>
+      <div class="seg small" role="radiogroup" aria-label="Days shown" id="srange"><button type="button" data-days="7">7 days</button><button type="button" data-days="30" aria-checked="true">30 days</button><button type="button" data-days="90">90 days</button></div></div>
+    <div class="tiles" id="stiles"></div>
+    <div class="card">
+      <div class="chead"><div class="label">App, extension and helper downloads per day</div><span class="label" id="isum"></span></div>
+      <div id="ichart" class="chart"></div>
+      <div class="legend"><span><i class="c-android"></i>Android app</span><span><i class="c-extension"></i>Extension</span><span><i class="c-helper"></i>PC helper</span><span></span></div>
+      <div id="idetail" class="chips"></div>
+    </div>
+    <div class="cols2">
+      <div class="card"><div class="label" style="margin-bottom:10px">Top sites</div><div class="barlist" id="ssites"></div></div>
+      <div class="card"><div class="label" style="margin-bottom:10px">Top countries</div><div class="barlist" id="scountries"></div><p class="sub small" id="cnote"></p></div>
+    </div>
+    <div class="cols2">
+      <div class="card"><div class="label" style="margin-bottom:10px">Where downloads start</div><div class="barlist" id="ssources"></div></div>
+      <div class="card"><div class="label" style="margin-bottom:10px">Video or audio</div><div class="barlist" id="skinds"></div></div>
+    </div>
+      </section>
+      <section class="page hidden" data-page="jobs">
+        <header class="phead"><h1>Downloads</h1><p class="sub">Files being made on the server right now. They're deleted soon after they're downloaded.</p></header>
+    <div class="card">
+      <div class="chead"><div class="label">Downloads on the server</div>
+        <span class="cacts"><span class="label" id="filesize"></span><button class="abtn danger" id="clearfiles" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Delete finished files</button></span></div>
+      <div class="tablewrap"><table class="t" id="jobs"><thead><tr><th>Title</th><th>From</th><th>Format</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="pager" id="jobpager"></div>
+    </div>
+
+      </section>
+      <section class="page hidden" data-page="log">
+        <header class="phead"><h1>Request log</h1><p class="sub">Every download request, kept for 30 days.</p></header>
+    <div class="card">
+      <div class="chead"><div class="label">Request log</div>
+        <span class="cacts"><a class="abtn" id="export" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export CSV</a><button class="abtn danger" id="clearlog" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Clear log</button></span></div>
+      <input id="search" class="search" type="search" placeholder="Search links, titles, IPs, sites" aria-label="Search the log">
+      <div class="tablewrap"><table class="t" id="log"><thead><tr><th>When</th><th>Title / link</th><th>Site</th><th>From</th><th>Format</th><th>Result</th><th>IP</th></tr></thead><tbody></tbody></table></div>
+      <div class="pager" id="logpager"></div>
+    </div>
+
+      </section>
+      <section class="page hidden" data-page="app">
+        <header class="phead"><h1>Android app</h1><p class="sub">Drop the release APK and press Publish. The version is read from the APK, and the update file phones check (<code>/app/version.json</code>) is written for you. <span id="uplimit"></span></p></header>
+    <div class="card">
+      <div class="chead"><div class="label">What phones get now</div><span id="appver" class="sub"></span></div>
+      <div class="sysgrid" id="apkgrid" style="margin-top:12px"></div>
+      <div id="appnotes"></div>
+    </div>
+    <div class="card relcard">
+        <div class="label" style="margin-bottom:12px">Publish a new version</div>
+        <form id="f-android" class="relform">
+          <label class="drop" id="apkdrop">
+            <input type="file" id="apkfiles" accept=".apk,.json" multiple>
+            <b>Drop the APK here, or click to pick it</b>
+            <span>From <code>app/build/outputs/apk/release</code>. <code>app-universal-release.apk</code> works on every phone; you can add the per-CPU ones too. The version is read from the APK.</span>
+          </label>
+          <ul class="picked" id="apklist"></ul>
+          <label class="block">What's new (optional, one per line)<textarea name="changelog" rows="3" placeholder="Faster playlist downloads&#10;Bug fixes"></textarea></label>
+          <label class="check"><input type="checkbox" name="force_update" value="true"> Make everyone update (older versions stop working until they do)</label>
+          <div class="actions"><button class="btn small" type="submit">Publish app</button><button class="btn small ghost" type="button" data-unpublish="android">Remove</button></div>
+        </form>
+            <div class="hint" id="relhint"></div>
+    </div>
+      </section>
+      <section class="page hidden" data-page="extension">
+        <header class="phead"><h1>Browser extension</h1><p class="sub">Shown on the main page under "Get Haul". Each visitor sees the button for their own browser: the store link if you've added one, or the file to install by hand.</p></header>
+    <div class="card">
+      <div class="chead" style="margin-bottom:12px"><div class="label">What visitors get now</div><span class="sub" id="extver"></span></div>
+      <div class="label" style="margin:4px 0 8px">Store links</div>
+      <div class="sysgrid" id="storegrid"></div>
+      <div class="label" style="margin:18px 0 8px">Files to install by hand</div>
+      <div class="sysgrid" id="pkggrid"></div>
+    </div>
+    <div class="card relcard">
+        <form id="f-extension" class="relform">
+          <input type="hidden" name="all_stores" value="1">
+          <div class="label" style="margin-bottom:12px">Store links</div>
+          <p class="sub" style="margin:0 0 12px">Paste the extension's page on each store it's listed in. Leave a box empty if it isn't on that store.</p>
+          <div class="storeform">
+            <label><span class="storename"><i class="bdot chrome"></i>Chrome Web Store</span><input name="store_chrome" type="url" placeholder="https://chromewebstore.google.com/detail/…"><small>Also used by Brave, Vivaldi and other Chromium browsers.</small></label>
+            <label><span class="storename"><i class="bdot edge"></i>Edge Add-ons</span><input name="store_edge" type="url" placeholder="https://microsoftedge.microsoft.com/addons/detail/…"></label>
+            <label><span class="storename"><i class="bdot firefox"></i>Firefox Add-ons</span><input name="store_firefox" type="url" placeholder="https://addons.mozilla.org/firefox/addon/…"></label>
+            <label><span class="storename"><i class="bdot opera"></i>Opera Add-ons</span><input name="store_opera" type="url" placeholder="https://addons.opera.com/extensions/details/…"></label>
+          </div>
+          <div class="label" style="margin:20px 0 12px">Extension files (optional)</div>
+          <label class="drop" id="extdrop">
+            <input type="file" id="extfiles" multiple accept=".zip,.crx,.xpi">
+            <b>Drop the extension .zip here, or click to pick it</b>
+            <span>The Chrome .zip works in Chrome, Edge, Brave and Opera. A Firefox build (.xpi, or a .zip whose manifest is for Firefox) goes in the Firefox slot. The version is read from manifest.json.</span>
+          </label>
+          <ul class="picked" id="extlist"></ul>
+          <details class="more">
+            <summary>More options</summary>
+            <div class="opts" style="margin-top:12px"><label>Version<input name="version" placeholder="read from the file"></label></div>
+            <label class="block">Note on the main page (optional)<textarea name="notes" rows="2" placeholder="e.g. how to install"></textarea></label>
+          </details>
+          <div class="actions"><button class="btn small" type="submit">Save extension</button><button class="btn small ghost" type="button" data-unpublish="extension">Remove all</button></div>
+        </form>
+    </div>
+      </section>
+      <section class="page hidden" data-page="helper">
+        <header class="phead"><h1>PC helper</h1><p class="sub">The helper lets the extension download on the visitor's own computer. Drop the helper files and press Publish. Each file's system and version are read from the file itself.</p></header>
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">What visitors get now</div>
+      <div class="sysgrid" id="sysgrid"></div>
+      <p class="sub" style="margin:12px 0 0">Windows visitors download the .exe from <a href="helper" target="_blank">/helper</a>. Mac and Linux visitors paste <code>curl -fsSL &lt;site&gt;/install.sh | sh</code> into Terminal, which fetches the right file.</p>
+    </div>
+    <div class="card relcard">
+        <form id="f-helper" class="relform">
+          <div class="label" style="margin-bottom:12px">Publish a new helper</div>
+          <label class="drop" id="helperdrop">
+            <input type="file" id="helperfiles" multiple>
+            <b>Drop the helper files here, or click to pick them</b>
+            <span>From the extension's <code>helper</code> folder: <code>haul-helper.exe</code>, <code>haul-helper-mac</code>, <code>haul-helper-linux-x64</code> and <code>haul-helper-linux-arm64</code>. Drop all four or only the ones that changed.</span>
+          </label>
+          <ul class="picked" id="helperlist"></ul>
+          <details class="more">
+            <summary>More options</summary>
+            <div class="opts" style="margin-top:12px"><label>Version<input name="version" placeholder="read from the files"></label></div>
+            <label class="block">Note on the download page (optional)<textarea name="notes" rows="2"></textarea></label>
+          </details>
+          <div class="actions"><button class="btn small" type="submit">Publish helper</button><button class="btn small ghost" type="button" data-unpublish="helper">Remove all</button></div>
+        </form>
+    </div>
+      </section>
+      <section class="page hidden" data-page="files">
+        <header class="phead"><h1>Other files</h1><p class="sub">Guides, older versions or anything else. They're listed on the main page under "Get Haul", below the app and extension.</p></header>
+    <div class="card">
+      <div class="chead" style="margin-bottom:12px"><div class="label">On the main page now</div><span class="label" id="filecount"></span></div>
+      <div class="tablewrap"><table class="t" id="files"><thead><tr><th>Title</th><th>Size</th><th>Added</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card relcard">
+        <form id="f-files" class="relform">
+          <div class="label" style="margin-bottom:12px">Add files</div>
+          <label class="drop" id="otherdrop">
+            <input type="file" id="otherfiles" multiple>
+            <b>Drop files here, or click to pick them</b>
+            <span>Any kind of file: a PDF guide, an older APK, a zip. Each one gets a title from its name, which you can change below before uploading. A file with the same name replaces the old one.</span>
+          </label>
+          <ul class="picked titled" id="otherlist"></ul>
+          <div class="actions"><button class="btn small" type="submit">Upload</button></div>
+        </form>
+    </div>
+      </section>
+      <section class="page hidden" data-page="site">
+        <header class="phead"><h1>Site settings</h1><p class="sub">The site's name, an announcement for every visitor, and the contact email. Saved at once, no restart needed.</p></header>
+    <div class="card relcard">
+      <form id="f-site" class="relform">
+        <div class="formgrid">
+          <label>Site name<input name="site_name" maxlength="40" placeholder="Haul" required><small>Shown in the logo, page titles and link previews.</small></label>
+          <label>Contact email<input name="contact_email" type="email" maxlength="200" id="contactin"><small id="contacthint">Shown on the Contact page.</small></label>
+        </div>
+        <div class="label" style="margin:18px 0 8px">Announcement banner</div>
+        <label class="block">Message (leave empty for no banner)<textarea name="banner" rows="2" maxlength="500" placeholder="e.g. YouTube downloads are slow today. We're on it."></textarea></label>
+        <div class="seg small" role="radiogroup" aria-label="Banner style" id="blevel"><button type="button" data-level="info" aria-checked="true">Info</button><button type="button" data-level="warn">Warning</button><button type="button" data-level="bad">Problem</button></div>
+        <div class="label" style="margin:16px 0 6px">Preview</div>
+        <div class="bannerprev" id="bannerprev"></div>
+        <div class="actions"><button class="btn small" type="submit">Save settings</button></div>
+        <div class="hint" id="sitehint"></div>
+      </form>
+    </div>
+      </section>
+      <section class="page hidden" data-page="blocking">
+        <header class="phead"><h1>Blocking</h1><p class="sub">Stop abuse: block addresses, and cap how many downloads one visitor can start a day.</p></header>
+    <div class="alert warn hidden" id="proxywarn">The server sees every visitor with the same address because <code>HAUL_TRUST_PROXY</code> is off. Blocking or a daily limit would hit everyone. Add <code>HAUL_TRUST_PROXY: "1"</code> to docker-compose.yml (it's there, commented out) and rebuild.</div>
+    <div class="card relcard">
+      <form id="f-limit" class="relform">
+        <div class="label" style="margin-bottom:12px">Daily limit per visitor</div>
+        <div class="inline"><input name="daily_limit" type="number" min="0" max="100000" step="1" style="width:120px"><span class="sub">downloads in 24 hours. 0 means no limit.</span><button class="btn small" type="submit">Save</button></div>
+        <div class="hint" id="limithint"></div>
+      </form>
+    </div>
+    <div class="card relcard">
+      <form id="f-ban" class="relform">
+        <div class="label" style="margin-bottom:12px">Block an address</div>
+        <div class="inline"><input name="ip" placeholder="1.2.3.4 or 1.2.3.0/24" required style="width:220px"><input name="note" placeholder="Why (optional)" maxlength="200" style="flex:1;min-width:180px"><button class="btn small" type="submit">Block</button></div>
+        <p class="sub small" style="margin:8px 0 0">Tip: you can also block from the Request log, next to each address.</p>
+        <div class="hint" id="banhint"></div>
+      </form>
+      <div class="chead" style="margin:18px 0 10px"><div class="label">Blocked now</div><span class="label" id="bancount"></span></div>
+      <div class="tablewrap"><table class="t" id="bans"><thead><tr><th>Address</th><th>Why</th><th>Since</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+      </section>
+      <section class="page hidden" data-page="alerts">
+        <header class="phead"><h1>Alerts</h1><p class="sub">Get a message when something needs you: YouTube cookies expiring, the disk filling up, or downloads failing. Checked every 10 minutes; the same problem is sent again after 12 hours if it's still there.</p></header>
+    <div class="card"><div class="label" style="margin-bottom:8px">Problems right now</div><div id="alertsnow"></div></div>
+    <form id="f-alerts" class="relform">
+    <div class="cols2">
+      <div class="card">
+        <div class="label" style="margin-bottom:12px">Telegram</div>
+        <div class="formgrid one">
+          <label>Bot token<input name="telegram_token" type="password" autocomplete="off" placeholder="123456:ABC…"><small>Make a bot with @BotFather and paste its token.</small></label>
+          <label>Chat ID<input name="telegram_chat" placeholder="e.g. 123456789"><small>Message your bot once, then open api.telegram.org/bot&lt;token&gt;/getUpdates and copy chat.id.</small></label>
+        </div>
+        <div class="actions"><button class="btn small" type="button" data-save="tghint">Save Telegram settings</button><button class="btn small ghost" type="button" data-test="telegram">Test Telegram</button></div>
+        <div class="hint" id="tghint"></div>
+      </div>
+      <div class="card">
+        <div class="label" style="margin-bottom:12px">Email (SMTP)</div>
+        <div class="formgrid">
+          <label class="wide">SMTP host<input name="smtp_host" placeholder="smtp.gmail.com" autocomplete="off"></label>
+          <label>Port<input name="smtp_port" type="number" min="1" max="65535" placeholder="587"></label>
+          <label>Security<select name="smtp_security"><option value="starttls">STARTTLS</option><option value="ssl">SSL/TLS</option><option value="none">None</option></select><small>STARTTLS uses port 587, SSL/TLS port 465.</small></label>
+          <label>Username<input name="smtp_user" autocomplete="off"></label>
+          <label>Password<input name="smtp_password" type="password" autocomplete="new-password"><small>For Gmail, use an app password.</small></label>
+          <label>From email<input name="email_from" type="email" placeholder="Same as username"></label>
+          <label>From name<input name="email_name" maxlength="100" placeholder="Haul alerts"></label>
+          <label class="wide">Send alerts to<input name="email_to" placeholder="you@example.com"><small>Several addresses? Separate them with commas.</small></label>
+        </div>
+        <div class="actions"><button class="btn small" type="button" data-save="smtphint">Save SMTP settings</button><button class="btn small ghost" type="button" data-test="email">Test SMTP</button></div>
+        <div class="hint" id="smtphint"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label" style="margin-bottom:12px">Send alerts about</div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" name="cookies"> YouTube cookies expiring or stopped working</label>
+        <label class="check"><input type="checkbox" name="disk"> Disk almost full</label>
+        <label class="check"><input type="checkbox" name="failures"> Downloads failing again and again</label>
+        <label class="check"><input type="checkbox" name="updates"> yt-dlp updates that failed or need a restart</label>
+      </div>
+      <div class="actions"><button class="btn small" type="submit">Save</button></div>
+      <div class="hint" id="alerthint"></div>
+    </div>
+    </form>
+      </section>
+      <section class="page hidden" data-page="cookies">
+        <header class="phead"><h1>YouTube cookies</h1><p class="sub">Helps when YouTube blocks the server. Use a spare Google account.</p></header>
     <div class="card" id="cookies">
       <div class="chead"><div class="label">YouTube cookies</div><span class="pill" id="cookiepill"></span></div>
       <div id="cookiestate" class="sub" style="margin-top:8px"></div>
@@ -73,99 +325,32 @@
       <div class="hint" id="cookiehint"></div>
     </div>
 
-    <!-- Downloads offered on the page -->
-    <div class="card" id="releases">
-      <div class="chead"><div class="label">App, extension and helper downloads</div><span class="label" id="uplimit"></span></div>
-      <p class="sub" style="margin-top:8px">What you upload here shows on the main page under "Get Haul". Publishing the Android app also writes the update file the app checks (<code>/app/version.json</code>) for you, so there's nothing else to upload and phones get the new version.</p>
-
-      <div class="rel">
-        <div class="relhead"><b>Android app</b><span class="sub" id="rel-android"></span></div>
-        <form id="f-android" class="relform">
-          <label class="drop" id="apkdrop">
-            <input type="file" id="apkfiles" accept=".apk,.json" multiple>
-            <b>Drop the APK here, or click to pick it</b>
-            <span>From <code>app/build/outputs/apk/release</code>. <code>app-universal-release.apk</code> works on every phone; you can add the per-CPU ones too. The version is read from the APK.</span>
-          </label>
-          <ul class="picked" id="apklist"></ul>
-          <label class="block">What's new (optional, one per line)<textarea name="changelog" rows="3" placeholder="Faster playlist downloads&#10;Bug fixes"></textarea></label>
-          <label class="check"><input type="checkbox" name="force_update" value="true"> Make everyone update (older versions stop working until they do)</label>
-          <div class="actions"><button class="btn small" type="submit">Publish app</button><button class="btn small ghost" type="button" data-unpublish="android">Remove</button></div>
-        </form>
-      </div>
-
-      <div class="rel">
-        <div class="relhead"><b>Browser extension</b><span class="sub" id="rel-extension"></span></div>
-        <form id="f-extension" class="relform">
-          <div class="opts">
-            <label>Version<input name="version" placeholder="2.0.0"></label>
-            <label class="grow">Chrome Web Store link (optional)<input name="store_url" type="url" placeholder="https://chromewebstore.google.com/detail/…"></label>
-            <label>Extension .zip<input type="file" name="file" accept=".zip,.crx"></label>
-          </div>
-          <label class="block">Notes<textarea name="notes" rows="2" placeholder="Shown on the page, e.g. how to install"></textarea></label>
-          <div class="actions"><button class="btn small" type="submit">Publish extension</button><button class="btn small ghost" type="button" data-unpublish="extension">Remove</button></div>
-        </form>
-      </div>
-
-      <div class="rel">
-        <div class="relhead"><b>PC helper</b><span class="sub" id="rel-helper"></span></div>
-        <form id="f-helper" class="relform">
-          <div class="opts">
-            <label>Version<input name="version" placeholder="0.4.0"></label>
-          </div>
-          <p class="sub" style="margin:0 0 10px">Pick only the builds you're updating; the others stay as they are. Mac and Linux users install with <code>curl -fsSL &lt;site&gt;/install.sh | sh</code>, which downloads these.</p>
-          <div class="opts">
-            <label>Windows (haul-helper.exe)<input type="file" name="file" accept=".exe,.zip,.msi"></label>
-            <label>Mac (haul-helper-mac)<input type="file" name="mac"></label>
-            <label>Linux x64 (haul-helper-linux-x64)<input type="file" name="linux-x64"></label>
-            <label>Linux ARM64 (haul-helper-linux-arm64)<input type="file" name="linux-arm64"></label>
-          </div>
-          <label class="block">Notes<textarea name="notes" rows="2" placeholder="Shown on the page"></textarea></label>
-          <div class="actions"><button class="btn small" type="submit">Publish helper</button><button class="btn small ghost" type="button" data-unpublish="helper">Remove</button></div>
-        </form>
-      </div>
-
-      <div class="rel">
-        <div class="relhead"><b>Other files</b><span class="sub">Guides, older versions, anything else to offer</span></div>
-        <form id="f-files" class="relform">
-          <div class="opts">
-            <label class="grow">Title (optional)<input name="title" placeholder="Install guide (PDF)"></label>
-            <label>File<input type="file" name="file" required></label>
-          </div>
-          <div class="actions"><button class="btn small" type="submit">Upload file</button></div>
-        </form>
-        <div class="tablewrap"><table class="t" id="files"><tbody></tbody></table></div>
-      </div>
-      <div class="upbar hidden" id="upbar"><i></i></div>
-      <div class="hint" id="relhint"></div>
-    </div>
-
-    <!-- Live jobs -->
-    <div class="card">
-      <div class="chead"><div class="label">Downloads on the server</div>
-        <span><span class="label" id="filesize"></span> <button class="linkbtn" id="clearfiles" type="button">Delete finished files</button></span></div>
-      <div class="tablewrap"><table class="t" id="jobs"><thead><tr><th>Title</th><th>From</th><th>Format</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
-    </div>
-
-    <!-- Request log -->
-    <div class="card">
-      <div class="chead"><div class="label">Request log</div>
-        <span><a class="linkbtn" id="export" href="#">Export CSV</a> · <button class="linkbtn" id="clearlog" type="button">Clear</button></span></div>
-      <input id="search" class="search" type="search" placeholder="Search links, titles, IPs, sites" aria-label="Search the log">
-      <div class="tablewrap"><table class="t" id="log"><thead><tr><th>When</th><th>Title / link</th><th>Site</th><th>From</th><th>Format</th><th>Result</th><th>IP</th></tr></thead><tbody></tbody></table></div>
-      <button class="linkbtn" id="moreLog" type="button">Show more</button>
-    </div>
-
-    <!-- Server -->
+      </section>
+      <section class="page hidden" data-page="server">
+        <header class="phead"><h1>Server</h1><p class="sub">Versions, limits, and updating yt-dlp.</p></header>
     <div class="card">
       <div class="label" style="margin-bottom:8px">Server</div>
       <div id="server" class="kv"></div>
-      <p class="sub" style="margin-top:12px">Sites change and old yt-dlp versions stop working. Update when downloads start failing, then restart to load it. Restarting needs Docker (or another process manager) to start the server again.</p>
+      <p class="sub" style="margin-top:12px">Sites change and old yt-dlp versions stop working. <b>Update yt-dlp now</b> installs the newest one and restarts the server to load it as soon as nothing is downloading. Restarting needs Docker (or another process manager) to start the server again.</p>
       <div class="actions">
-        <button class="btn small" id="update" type="button">Update yt-dlp</button>
+        <button class="btn small" id="update" type="button">Update yt-dlp now</button>
         <button class="btn small ghost" id="restart" type="button">Restart server</button>
       </div>
       <div class="hint" id="serverhint"></div>
     </div>
+    <div class="card relcard">
+      <div class="label" style="margin-bottom:8px">Backup</div>
+      <p class="sub" style="margin:0 0 12px">A zip of the settings, request log, phone pairings, YouTube cookies and the list of published files. Keep it private: the cookies sign in to YouTube. To restore, stop the server, put the files back in its data folder and start it again.</p>
+      <form class="relform" id="f-backup"><label class="check"><input type="checkbox" id="backuprel"> Also include the published app, extension and helper files</label>
+      <div class="actions"><button class="btn small" type="submit">Download backup</button></div></form>
+    </div>
+      </section>
+  </main>
+</div>
+<div class="player hidden" id="player" role="dialog" aria-modal="true" aria-label="Play">
+  <div class="playerbox">
+    <div class="playerhead"><b id="playertitle"></b><button type="button" class="abtn" id="playerclose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Close</button></div>
+    <div id="playerbody"></div>
   </div>
 </div>
 <script src="admin.js"></script>

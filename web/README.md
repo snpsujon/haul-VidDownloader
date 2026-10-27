@@ -76,10 +76,28 @@ looks for the extension IDs in `HAUL_EXTENSION_IDS`.
 Files made on the server are deleted a few minutes after they've been downloaded once
 (`HAUL_SEND_GRACE_MIN`), or after `HAUL_FILE_TTL_MIN` if nobody fetches them.
 
+## Stats, blocking, alerts and site settings
+
+All on the admin page, saved in `$HAUL_DATA_DIR/settings.json` (no restart needed):
+
+- **Site settings:** the site's name (logo, page titles, link previews), an announcement banner
+  shown on every page (`GET /api/site`), and the contact email (overrides `HAUL_CONTACT_EMAIL`).
+- **Blocking:** block an address or range (`1.2.3.0/24`), also from the Request log, and a daily
+  download limit per visitor. Behind Cloudflare, nginx or Caddy set `HAUL_TRUST_PROXY=1`, or every
+  visitor has the proxy's address. `CF-Connecting-IP` is used when it's there.
+- **Alerts:** Telegram (bot token + chat ID) and/or email (SMTP). Checked every 10 minutes; the
+  same problem is sent again after 12 hours if it's still there.
+- **Stats:** top sites, countries (from Cloudflare's `CF-IPCountry`), where downloads start, and
+  app, extension and helper downloads per day. Store links go through `/get/extension/store/<store>`
+  so clicks are counted.
+- **Server:** "Update yt-dlp now" installs the newest yt-dlp and restarts when nothing is
+  downloading; "Download backup" gives a zip of the data folder's settings, log, pairings, cookies
+  and releases list (optionally the release files).
+
 ## App, extension and helper downloads
 
 The admin page has an upload card for the Android app (one or more APKs plus version and
-changelog), the browser extension (a .zip, a Chrome Web Store link, or both), the Windows PC
+changelog), the browser extension (store links for Chrome, Edge, Firefox and Opera, plus the .zip and a Firefox file to install by hand), the Windows PC
 helper, and any other file. What's uploaded shows on the main page under "Get Haul", and the
 section stays hidden until something is uploaded. Files live in `$HAUL_DATA_DIR/releases`, so
 they survive rebuilds when that folder is a volume.
@@ -90,6 +108,9 @@ they survive rebuilds when that folder is a volume.
   builds, served at `/get/helper/mac`, `/get/helper/linux-x64` and `/get/helper/linux-arm64`.
   Mac and Linux users install with `curl -fsSL <site>/install.sh | sh` (add `-s uninstall` to remove);
   `static/install.sh` is served as plain text with LF line endings, pointed at this site.
+- The extension's version and browser are read from each file's manifest.json (a .xpi, or a manifest
+  with a `gecko` key, is Firefox). The main page shows each visitor the button for their own browser.
+  The Firefox file is served at `/get/extension/firefox`.
 - `/helper` is a download page for the PC helper with setup steps, for linking from the extension.
 - Publishing the Android app: drop the release APK(s) on the admin page. The version name, version
   code and CPU type are read from each APK; debug builds and older versions are refused. A

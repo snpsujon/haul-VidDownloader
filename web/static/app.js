@@ -732,11 +732,31 @@
         '<div class="alt">Allow installs from your browser when Android asks.</div></div>');
     }
     if (x) {
-      cards.push('<div class="ghcard"><h3>Browser extension</h3><p class="sub">' + [ver(x.version), 'Chrome, Edge, Brave'].filter(Boolean).join(' · ') + '</p>' + notes(x.notes) +
-        (x.store_url ? '<a class="btn small" href="' + esc(x.store_url) + '" target="_blank" rel="noopener">Add to Chrome</a>' : '') +
-        (x.url ? '<a class="btn small' + (x.store_url ? ' ghost' : '') + '" href="' + esc(x.url) + '" download>Download .zip' + size(x.size) + '</a>' : '') +
-        (x.url && !x.store_url ? '<div class="alt">Unzip it, open chrome://extensions, turn on Developer mode and choose "Load unpacked".</div>' : '') + '</div>');
-      if (x.store_url) STORE_URL = x.store_url;
+      // The button for the visitor's own browser first: its store, else the file to install by hand.
+      var ua = navigator.userAgent, me = /Firefox\//.test(ua) ? 'firefox' : /Edg\//.test(ua) ? 'edge' : /OPR\//.test(ua) ? 'opera' : 'chrome';
+      var NAMES = { chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', opera: 'Opera' };
+      var STORE_NAMES = { chrome: 'Chrome Web Store', edge: 'Edge Add-ons', firefox: 'Firefox Add-ons', opera: 'Opera Add-ons' };
+      var st = x.stores || (x.store_url ? { chrome: x.store_url } : {}), b = x.builds || {};
+      var zip = b.chromium || (x.url ? { url: x.url, size: x.size } : null), xpi = b.firefox;
+      var go = x.store_links || {};   // through the site, so installs are counted
+      var mineKey = st[me] ? me : (me === 'edge' || me === 'opera') && st.chrome ? 'chrome' : null;
+      var mine = mineKey ? go[mineKey] || st[mineKey] : null;
+      var file = me === 'firefox' ? xpi : zip, main = '', how = '';
+      if (mine) main = '<a class="btn small" href="' + esc(mine) + '" target="_blank" rel="noopener">Add to ' + NAMES[me] + '</a>';
+      else if (file) {
+        main = '<a class="btn small" href="' + esc(file.url) + '" download>Download for ' + NAMES[me] + size(file.size) + '</a>';
+        how = me === 'firefox' ? 'Open about:addons, click the gear and choose "Install Add-on From File".'
+          : 'Unzip it, open ' + (me === 'edge' ? 'edge' : me === 'opera' ? 'opera' : 'chrome') + '://extensions, turn on Developer mode and choose "Load unpacked".';
+      } else how = 'Not available for ' + NAMES[me] + ' yet.';
+      var also = Object.keys(STORE_NAMES).filter(function (k) { return st[k] && k !== mineKey; })
+        .map(function (k) { return '<a href="' + esc(go[k] || st[k]) + '" target="_blank" rel="noopener">' + STORE_NAMES[k] + '</a>'; });
+      var usedFile = !mine && file;
+      if (zip && usedFile !== zip) also.push('<a href="' + esc(zip.url) + '" download>.zip file</a>');
+      if (xpi && usedFile !== xpi) also.push('<a href="' + esc(xpi.url) + '" download>Firefox file</a>');
+      var works = ['Chrome', 'Edge', 'Brave', 'Opera'].concat(st.firefox || xpi ? ['Firefox'] : []).join(', ');
+      cards.push('<div class="ghcard"><h3>Browser extension</h3><p class="sub">' + [ver(x.version), works].filter(Boolean).join(' · ') + '</p>' + notes(x.notes) +
+        main + (how ? '<div class="alt">' + esc(how) + '</div>' : '') + (also.length ? '<div class="alt">Other ways: ' + also.join(' · ') + '</div>' : '') + '</div>');
+      if (mine || st.chrome) STORE_URL = mine || go.chrome || st.chrome;
     }
     if (h && (h.url || h.builds)) {
       helperUrl = 'helper';

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
-  var token = null, logOffset = 0, timer = null;
+  var token = null, timer = null;
   try { token = sessionStorage.getItem('haul.admin'); } catch (e) { }
 
   function esc(s) {
@@ -46,11 +46,35 @@
 
   function screen(name) {
     show('login', name === 'login'); show('off', name === 'off'); show('panel', name === 'panel');
-    show('logout', name === 'panel');
+    show('outer', name !== 'panel');
+    if (name === 'panel') route();
     clearInterval(timer);
-    if (name === 'panel') { refresh(); loadLog(true); loadReleases(); loadCharts(); timer = setInterval(refresh, 4000); }
+    if (name === 'panel') { refresh(); loadLog(true); loadReleases(); loadCharts(); loadSettings(); timer = setInterval(refresh, 4000); }
     if (name === 'login') setTimeout(function () { $('password').focus(); }, 0);
   }
+
+  // Pages: the sidebar picks one by the address's #hash ------------------------------------
+
+  var PAGES = ['dashboard', 'stats', 'jobs', 'log', 'app', 'extension', 'helper', 'files', 'site', 'blocking', 'alerts', 'cookies', 'server'];
+  function route() {
+    var page = location.hash.slice(1);
+    if (PAGES.indexOf(page) < 0) page = 'dashboard';
+    [].forEach.call(document.querySelectorAll('[data-page]'), function (s) { s.classList.toggle('hidden', s.getAttribute('data-page') !== page); });
+    [].forEach.call(document.querySelectorAll('[data-nav]'), function (a) {
+      var on = a.getAttribute('data-nav') === page;
+      a.classList.toggle('on', on);
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    if (token) {
+      if (page === 'stats') loadStats();
+      if (page === 'site' || page === 'blocking' || page === 'alerts') loadSettings();
+    }
+    document.title = (document.querySelector('[data-nav="' + page + '"] span') || {}).textContent + ' · Haul admin';
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener('hashchange', route);
+
+  function badge(id, text) { var b = $(id); b.textContent = text || ''; b.classList.toggle('hidden', !text); }
 
   // Overview ----------------------------------------------------------------------------
 
@@ -106,6 +130,9 @@
 
   function renderOverview(o) {
     renderAlerts(o.alerts);
+    badge('nav-alerts', (o.alerts || []).length ? String(o.alerts.length) : '');
+    badge('nav-jobs', o.active_jobs ? String(o.active_jobs) : '');
+    $('nav-cookies').classList.toggle('hidden', !(o.cookies && o.cookies.present && (o.cookies.ok === false || o.cookies.expired)));
     var s = o.stats || {};
     $('tiles').innerHTML =
       tile('Downloads today', s.today || 0) +
@@ -189,50 +216,88 @@
 
   var STAGE = { downloading: 'Downloading', merging: 'Merging', converting: 'Converting', subtitles: 'Subtitles', tagging: 'Tagging', processing: 'Finishing', zipping: 'Zipping', queued: 'Waiting' };
 
+  // Page numbers under a table: "Showing 51–100 of 386", Prev 1 2 … 8 Next.
+  function pager(id, page, per, total, go) {
+    var pages = Math.max(1, Math.ceil(total / per)), el = $(id);
+    if (total <= per) { el.innerHTML = total ? '<span class="pinfo">' + total + ' in all</span>' : ''; return; }
+    var nums = [], i;
+    for (i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - page) <= 1) nums.push(i); else if (nums[nums.length - 1] !== '…') nums.push('…');
+    el.innerHTML = '<span class="pinfo">Showing ' + ((page - 1) * per + 1) + '–' + Math.min(page * per, total) + ' of ' + total + '</span><span class="pbtns">' +
+      '<button type="button" data-p="' + (page - 1) + '"' + (page === 1 ? ' disabled' : '') + '>‹ Prev</button>' +
+      nums.map(function (n) { return n === '…' ? '<span>…</span>' : '<button type="button" data-p="' + n + '"' + (n === page ? ' class="on" aria-current="page"' : '') + '>' + n + '</button>'; }).join('') +
+      '<button type="button" data-p="' + (page + 1) + '"' + (page === pages ? ' disabled' : '') + '>Next ›</button></span>';
+    el.onclick = function (e) { var p = +e.target.getAttribute('data-p'); if (p >= 1 && p <= pages && p !== page) go(p); };
+  }
+
+  var JOBS_PER = 20, jobPage = 1, lastJobs = [];
+  function isMedia(name) { return /\.(mp4|webm|mkv|mov|m4v|mp3|m4a|opus|ogg|wav|flac|aac)$/i.test(name || ''); }
   function renderJobs(r) {
-    var rows = r.jobs.map(function (j) {
+    if (r) lastJobs = r.jobs;
+    var total = lastJobs.length, pages = Math.max(1, Math.ceil(total / JOBS_PER));
+    if (jobPage > pages) jobPage = pages;
+    var rows = lastJobs.slice((jobPage - 1) * JOBS_PER, jobPage * JOBS_PER).map(function (j) {
       var st = j.status === 'running' ? (STAGE[j.stage] || 'Working') + (j.percent != null ? ' ' + Math.floor(j.percent) + '%' : '')
         : j.status === 'done' ? 'Ready · ' + bytes(j.size) : j.status === 'error' ? 'Failed' : j.status === 'queued' ? 'Waiting' : 'Cancelled';
       var cls = j.status === 'done' ? 'ok' : j.status === 'error' ? 'bad' : '';
+      var ready = j.status === 'done' && j.filename;
+      var acts = (ready && isMedia(j.filename) ? '<button class="abtn primary" data-play="' + esc(j.id) + '" data-title="' + esc(j.title || j.filename) + '" data-name="' + esc(j.filename) + '">▶ Play</button>' : '') +
+        (ready ? '<a class="abtn" href="api/admin/jobs/' + encodeURIComponent(j.id) + '/file?admin_token=' + encodeURIComponent(token) + '" target="_blank" rel="noopener">Open</a>' : '') +
+        '<button class="abtn danger" data-kill="' + esc(j.id) + '">' + (j.status === 'running' || j.status === 'queued' ? 'Cancel' : 'Delete') + '</button>';
       return '<tr><td class="title"><b>' + esc(j.title || j.url) + '</b><a href="' + esc(j.url) + '" target="_blank" rel="noopener">' + esc(j.url) + '</a>' +
         (j.error ? '<span class="bad">' + esc(j.error) + '</span>' : '') + '</td>' +
         '<td class="mono">' + esc(j.source) + '<br>' + esc(j.client) + '</td><td class="mono">' + esc(j.label) + '</td>' +
         '<td class="mono ' + cls + '">' + esc(st) + '<br>' + esc(when(j.created)) + '</td>' +
-        '<td><button class="linkbtn" data-kill="' + esc(j.id) + '">' + (j.status === 'running' || j.status === 'queued' ? 'Cancel' : 'Delete') + '</button></td></tr>';
+        '<td><div class="rowacts">' + acts + '</div></td></tr>';
     });
     $('jobs').tBodies[0].innerHTML = rows.join('') || '<tr><td colspan="5" class="empty">Nothing on the server right now.</td></tr>';
+    pager('jobpager', jobPage, JOBS_PER, total, function (p) { jobPage = p; renderJobs(); });
   }
   $('jobs').addEventListener('click', function (e) {
     var id = e.target.getAttribute('data-kill');
     if (id) api('jobs/' + encodeURIComponent(id), { method: 'DELETE' }).then(refresh);
+    var play = e.target.getAttribute('data-play');
+    if (play) openPlayer(play, e.target.getAttribute('data-title'), e.target.getAttribute('data-name'));
   });
+
+  function openPlayer(id, title, name) {
+    var src = 'api/admin/jobs/' + encodeURIComponent(id) + '/file?admin_token=' + encodeURIComponent(token);
+    var audio = /\.(mp3|m4a|opus|ogg|wav|flac|aac)$/i.test(name);
+    $('playertitle').textContent = title;
+    $('playerbody').innerHTML = audio ? '<audio controls autoplay preload="metadata"></audio>' : '<video controls autoplay playsinline preload="metadata"></video>';
+    var m = $('playerbody').firstChild;
+    m.src = src;
+    m.onerror = function () { $('playerbody').insertAdjacentHTML('beforeend', '<p class="sub">This browser can\'t play ' + esc(name.split('.').pop().toUpperCase()) + ' files. Use Open to download it instead.</p>'); };
+    show('player', true);
+  }
+  function closePlayer() { $('playerbody').innerHTML = ''; show('player', false); }
+  $('playerclose').onclick = closePlayer;
+  $('player').addEventListener('click', function (e) { if (e.target === this) closePlayer(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('player').classList.contains('hidden')) closePlayer(); });
   $('clearfiles').onclick = function () {
+    if (!confirm('Delete every finished download on the server? People who haven\'t saved theirs yet will lose them.')) return;
     api('files/clear', { method: 'POST' }).then(function (r) { refresh(); hint('serverhint', 'Deleted ' + r.deleted + ' finished downloads.'); });
   };
 
   // Log -----------------------------------------------------------------------------------
 
-  var searchTimer = null;
+  var searchTimer = null, LOG_PER = 50, logPage = 1;
   function loadLog(reset) {
-    if (reset) logOffset = 0;
+    if (reset) logPage = 1;
     var q = $('search').value.trim();
-    api('requests?limit=100&offset=' + logOffset + (q ? '&q=' + encodeURIComponent(q) : '')).then(function (r) {
+    api('requests?limit=' + LOG_PER + '&offset=' + (logPage - 1) * LOG_PER + (q ? '&q=' + encodeURIComponent(q) : '')).then(function (r) {
       var html = r.requests.map(function (x) {
         var res = x.status === 'done' ? '<span class="ok">Done · ' + esc(bytes(x.size)) + '</span>' :
           x.status === 'error' ? '<span class="bad" title="' + esc(x.error) + '">Failed</span><br><small>' + esc((x.error || '').slice(0, 80)) + '</small>' : esc(x.status);
         return '<tr><td class="mono">' + esc(when(x.ts)) + '</td><td class="title"><b>' + esc(x.title || '—') + '</b><a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.url) + '</a></td>' +
           '<td class="mono">' + esc(x.site || '') + '</td><td class="mono">' + esc(x.source || '') + (x.client_version ? ' ' + esc(x.client_version) : '') + '</td>' +
-          '<td class="mono">' + esc(x.label || '') + '</td><td class="mono">' + res + '</td><td class="mono" title="' + esc(x.user_agent) + '">' + esc(x.ip || '') + '</td></tr>';
+          '<td class="mono">' + esc(x.label || '') + '</td><td class="mono">' + res + '</td><td class="mono" title="' + esc(x.user_agent) + '"><div class="ipcell">' + (x.country ? '<span title="' + esc(country(x.country)) + '">' + flag(x.country) + '</span>' : '') + esc(x.ip || '') +
+          (x.ip ? (x.banned ? '<button type="button" class="abtn small ok" data-unban="' + esc(x.ip) + '">Blocked · undo</button>' : '<button type="button" class="abtn small danger" data-ban="' + esc(x.ip) + '">Block</button>') : '') + '</div></td></tr>';
       }).join('');
-      var body = $('log').tBodies[0];
-      if (reset) body.innerHTML = html || '<tr><td colspan="7" class="empty">No requests yet.</td></tr>';
-      else body.insertAdjacentHTML('beforeend', html);
-      logOffset += r.requests.length;
-      show('moreLog', r.requests.length === 100);
+      $('log').tBodies[0].innerHTML = html || '<tr><td colspan="7" class="empty">' + (q ? 'Nothing matches that search.' : 'No requests yet.') + '</td></tr>';
+      pager('logpager', logPage, LOG_PER, r.total || 0, function (p) { logPage = p; loadLog(false); $('log').scrollIntoView({ block: 'start' }); });
     }).catch(function () { });
   }
   $('search').oninput = function () { clearTimeout(searchTimer); searchTimer = setTimeout(function () { loadLog(true); }, 300); };
-  $('moreLog').onclick = function () { loadLog(false); };
   $('export').onclick = function (e) { e.preventDefault(); location.href = 'api/admin/requests/export?admin_token=' + encodeURIComponent(token); };
   $('clearlog').onclick = function () {
     if (!confirm('Clear the whole request log?')) return;
@@ -241,13 +306,30 @@
 
   // Server --------------------------------------------------------------------------------
 
+  function waitForServer() {
+    var tries = 0, wait = setInterval(function () {
+      fetch('api/health').then(function (r) { return r.ok ? r.json() : null; }).then(function (h) {
+        if (h && tries > 1) { clearInterval(wait); hint('serverhint', 'Done. The server is running yt-dlp ' + h.yt_dlp + '.'); refresh(); }
+      }).catch(function () { });
+      if (++tries > 60) { clearInterval(wait); hint('serverhint', "The server didn't come back. Check that Docker restarts it.", true); }
+    }, 2000);
+  }
   $('update').onclick = function () {
     $('update').disabled = true;
     hint('serverhint', 'Updating yt-dlp. This can take a minute…');
-    api('ytdlp/update', { method: 'POST' }).then(function (r) {
-      hint('serverhint', r.restart_needed ? 'Installed yt-dlp ' + r.installed + '. Restart the server to start using it.' : 'yt-dlp ' + r.installed + ' is already the newest.');
+    api('ytdlp/update?restart=true', { method: 'POST' }).then(function (r) {
+      if (!r.restart_needed) hint('serverhint', 'yt-dlp ' + r.installed + ' is already the newest. Nothing to do.');
+      else if (r.restart === 'now') { hint('serverhint', 'Installed yt-dlp ' + r.installed + '. Restarting to load it…'); waitForServer(); }
+      else hint('serverhint', 'Installed yt-dlp ' + r.installed + '. Downloads are running, so press Restart server when they finish (or it restarts tonight).');
     }).catch(function (e) { hint('serverhint', e.message, true); }).finally(function () { $('update').disabled = false; });
   };
+  $('f-backup').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var a = document.createElement('a');
+    a.href = 'api/admin/backup?releases=' + ($('backuprel').checked ? 'true' : 'false') + '&admin_token=' + encodeURIComponent(token);
+    a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
   $('restart').onclick = function () {
     var go = function (force) {
       return api('restart' + (force ? '?force=true' : ''), { method: 'POST' }).then(function () {
@@ -271,20 +353,19 @@
   function loadReleases() {
     api('releases').then(function (r) {
       var p = r.public;
-      $('uplimit').textContent = 'Up to ' + r.max_upload_mb + ' MB per file';
+      $('uplimit').textContent = 'Up to ' + r.max_upload_mb + ' MB per file.';
       var a = p.android;
-      $('rel-android').innerHTML = a ? esc('Version ' + a.version + ' (' + a.version_code + ') · ' + Object.keys(a.apks).join(', ') + ' · ' + day(a.updated)) + ' · <a href="' + esc(a.url) + '">download</a> · <a href="app/version.json" target="_blank">version.json</a>' : 'Not uploaded yet';
-      ['extension', 'helper'].forEach(function (k) {
-        var x = p[k];
-        $('rel-' + k).innerHTML = x ? esc([x.version ? 'Version ' + x.version : '', x.builds ? Object.keys(x.builds).join(', ') : x.size ? bytes(x.size) : '', x.store_url ? 'store link' : '', day(x.updated)].filter(Boolean).join(' · ')) +
-          (x.url ? ' · <a href="' + esc(x.url) + '">download</a>' : '') : 'Not uploaded yet';
-        var f = $('f-' + k);
-        if (x) { if (x.version) f.version.value = x.version; if (f.notes) f.notes.value = x.notes || ''; if (f.store_url) f.store_url.value = x.store_url || ''; }
-      });
+      renderApks(a);
+      renderSystems(p.helper);
+      renderExtension(p.extension);
+      $('filecount').textContent = p.files.length ? p.files.length + (p.files.length === 1 ? ' file' : ' files') : '';
       $('files').tBodies[0].innerHTML = p.files.map(function (f) {
         return '<tr><td class="title"><b>' + esc(f.title) + '</b><a href="' + esc(f.url) + '">' + esc(f.name) + '</a></td><td class="mono">' + esc(bytes(f.size)) + '</td><td class="mono">' + esc(day(f.updated)) + '</td>' +
-          '<td><button class="linkbtn" type="button" data-delfile="' + esc(f.name) + '">Remove</button></td></tr>';
-      }).join('') || '<tr><td class="empty">No other files yet.</td></tr>';
+          '<td><div class="rowacts"><button class="abtn" type="button" data-copy="' + esc(f.url) + '">Copy link</button>' +
+          '<button class="abtn" type="button" data-retitle="' + esc(f.name) + '" data-title="' + esc(f.title) + '">Rename</button>' +
+          '<a class="abtn" href="' + esc(f.url) + '" target="_blank" rel="noopener">Open</a>' +
+          '<button class="abtn danger" type="button" data-delfile="' + esc(f.name) + '">Remove</button></div></td></tr>';
+      }).join('') || '<tr><td colspan="4" class="empty">No other files yet. Drop some below.</td></tr>';
     }).catch(function () { });
   }
 
@@ -365,7 +446,10 @@
         if (st === 401) { setToken(null); screen('login'); return; }
         if (st === 0) { setText('Lost the connection while publishing. Reload to see if it went through.', 'bad'); return; }
         if (st >= 400) { setText(typeof d.detail === 'string' ? d.detail : 'Publishing failed (error ' + st + ').', 'bad'); return; }
-        setText('✓ ' + (d.version ? 'Published version ' + d.version + ' (' + d.version_code + ') for ' + d.apks.join(', ') + '. Phones will see the update.' : 'Published.'), 'ok');
+        setText('✓ ' + (d.apks ? 'Published version ' + d.version + ' (' + d.version_code + ') for ' + d.apks.join(', ') + '. Phones will see the update.'
+        : d.names ? 'Uploaded ' + d.names.join(', ') + (d.names.length > 1 ? '. They\'re' : '. It\'s') + ' on the main page now.'
+        : d.packages ? 'Saved extension' + (d.version ? ' ' + d.version : '') + '. ' + (d.stores.length ? 'Store links: ' + d.stores.join(', ') + '. ' : 'No store links. ') + (d.packages.length ? 'New files: ' + d.packages.join(', ') + '.' : '')
+        : d.systems ? 'Published helper ' + (d.version || '') + (d.systems.length ? ' for ' + d.systems.join(', ') : '') + '.' : 'Published.'), 'ok');
         form.reset(); loadReleases(); if (done) done();
       });
     }
@@ -373,11 +457,91 @@
     if (files.length) { progress(0); sendFile(0); } else publish();
   }
 
+  // PC helper: one box for every system's file. The page guesses each file's system from its
+  // first bytes (the server checks again); the version is read on the server.
+  var SYSTEMS = [['windows', 'Windows'], ['mac', 'Mac'], ['linux-x64', 'Linux x64'], ['linux-arm64', 'Linux ARM64']];
+  var ABIS = [['universal', 'Universal', 'Works on every phone'], ['arm64-v8a', 'arm64-v8a', 'Most phones'],
+    ['armeabi-v7a', 'armeabi-v7a', 'Older phones'], ['x86_64', 'x86_64', 'Emulators, some tablets']];
+  function renderApks(a) {
+    var apks = (a && a.apks) || {};
+    $('appver').innerHTML = a ? esc('Version ' + a.version + ' · code ' + a.version_code + ' · ' + day(a.updated)) +
+      ' · <a href="app/version.json" target="_blank">version.json</a>' : 'Nothing published yet';
+    $('apkgrid').innerHTML = ABIS.map(function (x) {
+      var f = apks[x[0]];
+      return '<div class="sys' + (f ? ' have' : '') + '"><b>' + x[1] + '</b><span class="hintline">' + x[2] + '</span><span>' +
+        (f ? esc('Version ' + a.version + ' · ' + bytes(f.size)) : 'Not uploaded') + '</span>' +
+        (f ? '<a href="' + esc(f.url) + '">download</a>' : '') + '</div>';
+    }).join('');
+    var bits = [];
+    if (a && a.changelog.length) bits.push('<div class="label" style="margin:16px 0 6px">What\'s new</div><ul class="changes">' + a.changelog.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>');
+    if (a && a.min_supported) bits.push('<p class="sub" style="margin:12px 0 0">Phones older than version code ' + esc(a.min_supported) + ' have to update.</p>');
+    if (a && !apks.universal) bits.push('<p class="sub" style="margin:12px 0 0">Tip: also publish <code>app-universal-release.apk</code>. The site\'s Download APK button gives that one, so every phone can install it.</p>');
+    $('appnotes').innerHTML = bits.join('');
+  }
+
+  function renderSystems(h) {
+    var b = (h && h.builds) || {};
+    $('sysgrid').innerHTML = SYSTEMS.map(function (s) {
+      var x = b[s[0]];
+      return '<div class="sys' + (x ? ' have' : '') + '"><b>' + s[1] + '</b><span>' +
+        (x ? esc((h.version ? 'Version ' + h.version + ' · ' : '') + bytes(x.size)) : 'Not uploaded') + '</span>' +
+        (x ? '<a href="' + esc(x.url) + '">download</a>' : '') + '</div>';
+    }).join('');
+    if (h) { $('f-helper').notes.value = h.notes || ''; }
+  }
+  function sniff(file, cb) {
+    var r = new FileReader();
+    r.onload = function () {
+      var b = new Uint8Array(r.result), hex = Array.prototype.map.call(b.slice(0, 4), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+      if (b[0] === 0x4d && b[1] === 0x5a) return cb('Windows');
+      if (['cafebabe', 'feedface', 'feedfacf', 'cefaedfe', 'cffaedfe'].indexOf(hex) >= 0) return cb('Mac');
+      if (hex === '7f454c46') { var m = b[18] | (b[19] << 8); return cb(m === 0x3e ? 'Linux x64' : m === 0xb7 ? 'Linux ARM64' : null); }
+      cb(null);
+    };
+    r.onerror = function () { cb(null); };
+    r.readAsArrayBuffer(file.slice(0, 64));
+  }
+  var helperFiles = [];
+  function showHelpers() {
+    $('helperlist').innerHTML = helperFiles.map(function (f, i) {
+      var tag = f.sys ? '<span class="systag">' + esc(f.sys) + '</span>' : '<span class="systag bad">not a helper file</span>';
+      return '<li><span>' + esc(f.file.name) + '</span>' + tag + '<span class="mono">' + esc(bytes(f.file.size)) + '</span><button type="button" class="abtn danger" data-unhelper="' + i + '">Remove</button></li>';
+    }).join('');
+  }
+  function addHelpers(list) {
+    [].forEach.call(list, function (file) {
+      if (helperFiles.some(function (g) { return g.file.name === file.name; })) return;
+      var row = { file: file, sys: '…' };
+      helperFiles.push(row);
+      sniff(file, function (sys) { row.sys = sys; showHelpers(); });
+    });
+    showHelpers();
+  }
+  $('helperfiles').addEventListener('change', function () { addHelpers(this.files); this.value = ''; });
+  (function (drop) {
+    ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function (e) { e.preventDefault(); addHelpers(e.dataTransfer.files); });
+  })($('helperdrop'));
+  $('helperlist').addEventListener('click', function (e) {
+    var i = e.target.getAttribute('data-unhelper'); if (i === null) return;
+    helperFiles.splice(+i, 1); showHelpers();
+  });
+  $('f-helper').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var bad = helperFiles.filter(function (f) { return !f.sys; });
+    if (bad.length) { alert(bad[0].file.name + " isn't a helper file. Remove it first."); return; }
+    var data = new FormData(this);
+    helperFiles.forEach(function (f) { data.append('helpers', f.file); });
+    if (!helperFiles.length && !confirm('No new files picked. Only save the version and note?')) return;
+    upload('helper', this, function () { helperFiles = []; showHelpers(); }, data);
+  });
+
   // Android: drop APKs (and optionally the version.json from package_release.py).
   var apkFiles = [];
   function showApks() {
     $('apklist').innerHTML = apkFiles.map(function (f, i) {
-      return '<li><span>' + esc(f.name) + '</span><span class="mono">' + esc(bytes(f.size)) + '</span><button type="button" class="linkbtn" data-unpick="' + i + '">Remove</button></li>';
+      return '<li><span>' + esc(f.name) + '</span><span class="mono">' + esc(bytes(f.size)) + '</span><button type="button" class="abtn danger" data-unpick="' + i + '">Remove</button></li>';
     }).join('');
   }
   function addApks(list) {
@@ -403,13 +567,305 @@
     upload('android', this, function () { apkFiles = []; showApks(); }, data);
   });
 
-  ['extension', 'helper', 'files'].forEach(function (k) {
-    $('f-' + k).addEventListener('submit', function (e) { e.preventDefault(); upload(k, this); });
+  // Extension: a store link per browser, plus the files to install by hand.
+  var STORES = [['chrome', 'Chrome Web Store', 'Chrome, Brave, Vivaldi'], ['edge', 'Edge Add-ons', 'Microsoft Edge'],
+    ['firefox', 'Firefox Add-ons', 'Firefox'], ['opera', 'Opera Add-ons', 'Opera']];
+  var PACKAGES = [['chromium', 'Chrome .zip', 'Chrome, Edge, Brave, Opera'], ['firefox', 'Firefox file', 'Firefox']];
+  function renderExtension(x) {
+    var st = (x && x.stores) || {}, b = (x && x.builds) || {}, f = $('f-extension');
+    $('extver').textContent = x ? [x.version ? 'Version ' + x.version : '', day(x.updated)].filter(Boolean).join(' · ') : 'Nothing published yet';
+    $('storegrid').innerHTML = STORES.map(function (s) {
+      var u = st[s[0]];
+      return '<div class="sys' + (u ? ' have' : '') + '"><b><i class="bdot ' + s[0] + '"></i>' + s[1] + '</b><span class="hintline">' + s[2] + '</span><span>' + (u ? 'Linked' : 'No link') + '</span>' +
+        (u ? '<div class="sysacts"><a href="' + esc(u) + '" target="_blank" rel="noopener">open</a><button type="button" class="abtn danger" data-extpart="store/' + s[0] + '">Remove</button></div>' : '') + '</div>';
+    }).join('');
+    $('pkggrid').innerHTML = PACKAGES.map(function (s) {
+      var p = b[s[0]];
+      return '<div class="sys' + (p ? ' have' : '') + '"><b>' + s[1] + '</b><span class="hintline">' + s[2] + '</span><span>' +
+        (p ? esc((p.version ? 'Version ' + p.version + ' · ' : '') + bytes(p.size)) : s[0] === 'firefox' ? 'Not available yet' : 'Not uploaded') + '</span>' +
+        (p ? '<div class="sysacts"><a href="' + esc(p.url) + '">download</a><button type="button" class="abtn danger" data-extpart="package/' + s[0] + '">Remove</button></div>' : '') + '</div>';
+    }).join('');
+    STORES.forEach(function (s) { f['store_' + s[0]].value = st[s[0]] || ''; });
+    f.notes.value = (x && x.notes) || '';
+    f.version.value = '';
+  }
+  document.addEventListener('click', function (e) {
+    var part = e.target.getAttribute('data-extpart');
+    if (part && confirm('Remove this from the extension downloads?')) api('releases/extension/' + part, { method: 'DELETE' }).then(loadReleases);
   });
-  $('releases').addEventListener('click', function (e) {
+  var extFiles = [];
+  function extTag(f) { return /\.xpi$/i.test(f.name) ? 'Firefox' : /\.(zip|crx)$/i.test(f.name) ? 'checked on publish' : null; }
+  function showExt() {
+    $('extlist').innerHTML = extFiles.map(function (f, i) {
+      var t = extTag(f);
+      return '<li><span>' + esc(f.name) + '</span>' + (t ? '<span class="systag">' + esc(t) + '</span>' : '<span class="systag bad">not an extension file</span>') +
+        '<span class="mono">' + esc(bytes(f.size)) + '</span><button type="button" class="abtn danger" data-unext="' + i + '">Remove</button></li>';
+    }).join('');
+  }
+  function addExt(list) {
+    [].forEach.call(list, function (f) { if (!extFiles.some(function (g) { return g.name === f.name; })) extFiles.push(f); });
+    showExt();
+  }
+  $('extfiles').addEventListener('change', function () { addExt(this.files); this.value = ''; });
+  (function (drop) {
+    ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function (e) { e.preventDefault(); addExt(e.dataTransfer.files); });
+  })($('extdrop'));
+  $('extlist').addEventListener('click', function (e) {
+    var i = e.target.getAttribute('data-unext'); if (i === null) return;
+    extFiles.splice(+i, 1); showExt();
+  });
+  $('f-extension').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var bad = extFiles.filter(function (f) { return !extTag(f); });
+    if (bad.length) { alert(bad[0].name + " isn't a .zip, .crx or .xpi. Remove it first."); return; }
+    var data = new FormData(this);
+    extFiles.forEach(function (f) { data.append('packages', f); });
+    upload('extension', this, function () { extFiles = []; showExt(); }, data);
+  });
+
+  // Other files: drop any files, each gets a title from its name that can be edited first.
+  var otherFiles = [];
+  function niceTitle(name) {
+    var t = name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : name;
+  }
+  function showOther() {
+    $('otherlist').innerHTML = otherFiles.map(function (f, i) {
+      return '<li><input class="ftitle" data-i="' + i + '" value="' + esc(f.title) + '" aria-label="Title for ' + esc(f.file.name) + '" maxlength="120">' +
+        '<span class="fname">' + esc(f.file.name) + '</span><span class="mono">' + esc(bytes(f.file.size)) + '</span>' +
+        '<button type="button" class="abtn danger" data-unother="' + i + '">Remove</button></li>';
+    }).join('');
+  }
+  function addOther(list) {
+    [].forEach.call(list, function (file) {
+      if (!otherFiles.some(function (g) { return g.file.name === file.name; })) otherFiles.push({ file: file, title: niceTitle(file.name) });
+    });
+    showOther();
+  }
+  $('otherfiles').addEventListener('change', function () { addOther(this.files); this.value = ''; });
+  (function (drop) {
+    ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function (e) { e.preventDefault(); addOther(e.dataTransfer.files); });
+  })($('otherdrop'));
+  $('otherlist').addEventListener('input', function (e) { var i = e.target.getAttribute('data-i'); if (i !== null) otherFiles[+i].title = e.target.value; });
+  $('otherlist').addEventListener('click', function (e) {
+    var i = e.target.getAttribute('data-unother'); if (i === null) return;
+    otherFiles.splice(+i, 1); showOther();
+  });
+  $('f-files').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!otherFiles.length) { alert('Pick a file first.'); return; }
+    var data = new FormData();
+    otherFiles.forEach(function (f) { data.append('files', f.file); data.append('titles', f.title); });
+    upload('files', this, function () { otherFiles = []; showOther(); }, data);
+  });
+  $('files').addEventListener('click', function (e) {
+    var t = e.target, url = t.getAttribute('data-copy'), name = t.getAttribute('data-retitle');
+    if (url) {
+      var full = new URL(url, location.href).href;
+      (navigator.clipboard ? navigator.clipboard.writeText(full) : Promise.reject()).then(function () {
+        t.textContent = 'Copied'; setTimeout(function () { t.textContent = 'Copy link'; }, 1500);
+      }, function () { prompt('Copy this link:', full); });
+    }
+    if (name) {
+      var title = prompt('Title shown on the main page:', t.getAttribute('data-title') || '');
+      if (title === null) return;
+      api('releases/files/' + encodeURIComponent(name), { method: 'PATCH', body: { title: title } }).then(loadReleases);
+    }
+  });
+  document.addEventListener('click', function (e) {
     var slot = e.target.getAttribute('data-unpublish'), file = e.target.getAttribute('data-delfile');
     if (slot && confirm('Stop offering this download on the page?')) api('releases/' + slot, { method: 'DELETE' }).then(loadReleases);
     if (file && confirm('Remove ' + file + '?')) api('releases/files/' + encodeURIComponent(file), { method: 'DELETE' }).then(loadReleases);
+  });
+
+  // Countries -----------------------------------------------------------------------------
+
+  var regionNames = null;
+  try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { }
+  function country(code) { if (!code) return 'Unknown'; try { return (regionNames && regionNames.of(code)) || code; } catch (e) { return code; } }
+  function flag(code) {
+    if (!code || !/^[A-Z]{2}$/.test(code)) return '🌐';
+    return String.fromCodePoint(0x1f1e6 + code.charCodeAt(0) - 65, 0x1f1e6 + code.charCodeAt(1) - 65);
+  }
+
+  // Stats ---------------------------------------------------------------------------------
+
+  var sdays = 30;
+  var SOURCES = { web: 'Website', app: 'Android app', extension: 'Extension', 'legacy-extension': 'Old extension', 'legacy-web': 'Old website', api: 'API' };
+  function barlist(id, rows, label, empty) {
+    var max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r.n; })));
+    $(id).innerHTML = rows.map(function (r) {
+      return '<div class="brow"><span class="bname">' + label(r) + '</span><span class="btrack"><i style="width:' + Math.max(2, r.n / max * 100) + '%"></i></span><span class="mono">' + r.n + '</span></div>';
+    }).join('') || '<p class="empty">' + esc(empty || 'Nothing yet.') + '</p>';
+  }
+  function loadStats() {
+    api('stats?days=' + sdays).then(function (r) {
+      var t = r.installs.totals || {}, total = r.sources.reduce(function (a, x) { return a + x.n; }, 0);
+      var known = r.countries.filter(function (c) { return c.country; });
+      $('stiles').innerHTML = tile('Downloads', total) + tile('App downloads', t.android || 0) + tile('Extension installs', t.extension || 0) +
+        tile('Helper downloads', t.helper || 0) + tile('Countries', known.length);
+      // Stacked bars per day.
+      var d = r.installs.daily, max = Math.max(1, Math.max.apply(null, d.map(function (x) { return x.android + x.extension + x.helper; })));
+      var W = 700, H = 160, gap = d.length > 40 ? 1 : 3, bw = W / d.length - gap, sum = 0;
+      var bars = d.map(function (x, i) {
+        var px = i * (bw + gap), y = H - 20, parts = '';
+        ['android', 'extension', 'helper'].forEach(function (k) {
+          var h = x[k] / max * (H - 20); y -= h; sum += x[k];
+          if (h) parts += '<rect x="' + px + '" y="' + y + '" width="' + bw + '" height="' + h + '" class="c-' + k + '"/>';
+        });
+        var every = d.length <= 14 ? 1 : d.length <= 31 ? 3 : 10;
+        return '<g><title>' + esc(x.day + ': ' + x.android + ' app, ' + x.extension + ' extension, ' + x.helper + ' helper') + '</title>' +
+          '<rect x="' + px + '" y="0" width="' + bw + '" height="' + (H - 20) + '" class="hit"/>' + parts +
+          (i % every === 0 ? '<text x="' + (px + bw / 2) + '" y="' + (H - 4) + '">' + x.day.slice(5).replace('-', '/') + '</text>' : '') + '</g>';
+      }).join('');
+      $('ichart').innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Installs per day"><text x="0" y="10" class="ymax">' + max + '</text>' + bars + '</svg>';
+      $('isum').textContent = sum + ' in ' + sdays + ' days';
+      var DETAIL = { universal: 'APK universal', 'arm64-v8a': 'APK arm64', 'armeabi-v7a': 'APK armv7', x86_64: 'APK x86_64', zip: 'Extension .zip', 'firefox-file': 'Firefox file',
+        chrome: 'Chrome Web Store', edge: 'Edge Add-ons', firefox: 'Firefox Add-ons', opera: 'Opera Add-ons', store: 'Store link', windows: 'Helper Windows', mac: 'Helper Mac',
+        'linux-x64': 'Helper Linux x64', 'linux-arm64': 'Helper Linux ARM64' };
+      $('idetail').innerHTML = r.installs.detail.map(function (x) { return '<span class="chip">' + esc(DETAIL[x.detail] || x.kind + ' ' + x.detail) + ' <b>' + x.n + '</b></span>'; }).join('');
+      barlist('ssites', r.sites, function (x) { return esc(x.site) + (x.failed ? ' <small class="bad">' + x.failed + ' failed</small>' : ''); }, 'No downloads yet.');
+      barlist('scountries', r.countries, function (x) { return flag(x.country) + ' ' + esc(country(x.country)); }, 'No downloads yet.');
+      $('cnote').textContent = r.countries.length && !known.length ? 'Countries come from Cloudflare (the CF-IPCountry header). Downloads from before this update, or without Cloudflare in front, show as Unknown.' : '';
+      barlist('ssources', r.sources, function (x) { return esc(SOURCES[x.source] || x.source); });
+      barlist('skinds', r.kinds, function (x) { return esc(x.kind.charAt(0).toUpperCase() + x.kind.slice(1)); });
+    }).catch(function () { });
+  }
+  $('srange').addEventListener('click', function (e) {
+    var n = +e.target.getAttribute('data-days'); if (!n) return;
+    sdays = n;
+    [].forEach.call(this.children, function (b) { b.setAttribute('aria-checked', String(b === e.target)); });
+    loadStats();
+  });
+
+  // Site settings, blocking and alerts ------------------------------------------------------
+
+  var current = null, level = 'info';
+  function setLevel(l) {
+    level = l;
+    [].forEach.call($('blevel').children, function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-level') === l)); });
+    preview();
+  }
+  function preview() {
+    var t = $('f-site').banner.value.trim();
+    $('bannerprev').innerHTML = t ? '<div class="sitebanner ' + level + '"><span>' + esc(t) + '</span><button type="button" tabindex="-1" aria-hidden="true">×</button></div>' : '<p class="empty">No banner. Visitors see nothing extra.</p>';
+  }
+  function loadSettings() {
+    api('settings').then(function (s) {
+      current = s;
+      var f = $('f-site');
+      f.site_name.value = s.site_name || 'Haul';
+      f.contact_email.value = s.contact_email || '';
+      f.contact_email.placeholder = s.contact_email_env || 'hello@example.com';
+      $('contacthint').textContent = s.contact_email_env ? 'Leave empty to use ' + s.contact_email_env + ' from docker-compose.yml.' : 'Shown on the Contact page.';
+      f.banner.value = s.banner || '';
+      setLevel(s.banner_level || 'info');
+      $('f-limit').daily_limit.value = s.daily_limit || 0;
+      show('proxywarn', !s.trust_proxy);
+      renderBans(s.banned);
+      var a = s.alerts, g = $('f-alerts');
+      ['telegram_chat', 'smtp_host', 'smtp_port', 'smtp_user', 'email_from', 'email_name', 'email_to'].forEach(function (k) { g[k].value = a[k] || ''; });
+      g.smtp_security.value = a.smtp_security || 'starttls';
+      ['cookies', 'disk', 'failures', 'updates'].forEach(function (k) { g[k].checked = !!a[k]; });
+      g.telegram_token.value = ''; g.smtp_password.value = '';
+      g.telegram_token.placeholder = a.telegram_token ? 'Leave blank to keep current (' + a.telegram_token_hint + ')' : '123456:ABC…';
+      g.smtp_password.placeholder = a.smtp_password ? 'Leave blank to keep current (' + a.smtp_password_hint + ')' : '';
+      var on = (a.telegram_token && a.telegram_chat) || (a.smtp_host && a.email_to);
+      $('nav-alertsetup').classList.toggle('hidden', !!on);
+      if (!on) hint('alerthint', 'Not set up yet: alerts only show on the Dashboard.');
+      else if (/^Not set up/.test($('alerthint').textContent)) hint('alerthint', '');
+    }).catch(function () { });
+    api('overview').then(function (o) {
+      $('alertsnow').innerHTML = (o.alerts || []).map(function (a) { return '<div class="alert ' + (a.level === 'bad' ? 'bad' : 'warn') + '">' + esc(a.text) + '</div>'; }).join('') ||
+        '<p class="empty" style="text-align:left;padding:4px 0">Everything looks fine.</p>';
+    }).catch(function () { });
+  }
+  function renderBans(list) {
+    $('bancount').textContent = list.length ? list.length + ' blocked' : '';
+    badge('nav-bans', list.length ? String(list.length) : '');
+    $('bans').tBodies[0].innerHTML = list.map(function (b) {
+      return '<tr><td class="mono">' + esc(b.ip) + '</td><td>' + esc(b.note || '—') + '</td><td class="mono">' + esc(when(b.at)) + '</td>' +
+        '<td><div class="rowacts"><button type="button" class="abtn" data-unban="' + esc(b.ip) + '">Unblock</button></div></td></tr>';
+    }).join('') || '<tr><td colspan="4" class="empty">Nobody is blocked.</td></tr>';
+  }
+  $('blevel').addEventListener('click', function (e) { var l = e.target.getAttribute('data-level'); if (l) setLevel(l); });
+  $('f-site').banner.addEventListener('input', preview);
+  $('f-site').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = this;
+    api('settings', { method: 'PUT', body: { site_name: f.site_name.value, contact_email: f.contact_email.value, banner: f.banner.value,
+      banner_level: level, daily_limit: (current && current.daily_limit) || 0 } })
+      .then(function (s) { current = s; hint('sitehint', '✓ Saved. Visitors see it on their next page load.'); })
+      .catch(function (err) { hint('sitehint', err.message, true); });
+  });
+  $('f-limit').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var n = Math.max(0, parseInt(this.daily_limit.value, 10) || 0), c = current || {};
+    api('settings', { method: 'PUT', body: { site_name: c.site_name || 'Haul', contact_email: c.contact_email || '', banner: c.banner || '',
+      banner_level: c.banner_level || 'info', daily_limit: n } })
+      .then(function (s) { current = s; hint('limithint', n ? '✓ Each visitor can start ' + n + ' downloads a day.' : '✓ No daily limit.'); })
+      .catch(function (err) { hint('limithint', err.message, true); });
+  });
+  function ban(ip, note, hintId) {
+    return api('bans', { method: 'POST', body: { ip: ip, note: note || '' } }).then(function () {
+      loadSettings(); loadLog(false);
+      if (hintId) hint(hintId, '✓ Blocked ' + ip + '.');
+    }).catch(function (err) { if (hintId) hint(hintId, err.message, true); else alert(err.message); });
+  }
+  function unban(ip) {
+    return api('bans/' + encodeURIComponent(ip), { method: 'DELETE' }).then(function () { loadSettings(); loadLog(false); }).catch(function (err) { alert(err.message); });
+  }
+  $('f-ban').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = this;
+    ban(f.ip.value.trim(), f.note.value, 'banhint').then(function () { f.reset(); });
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target.getAttribute('data-ban'), u = e.target.getAttribute('data-unban');
+    if (b) { var note = prompt('Block ' + b + '? They won\'t be able to download anything.\n\nWhy (optional):', ''); if (note !== null) ban(b, note); }
+    if (u && confirm('Unblock ' + u + '?')) unban(u);
+  });
+  function alertBody(g) {
+    var body = {};
+    ['telegram_chat', 'smtp_host', 'smtp_user', 'email_from', 'email_name', 'email_to', 'smtp_security'].forEach(function (k) { body[k] = g[k].value; });
+    body.smtp_port = parseInt(g.smtp_port.value, 10) || ({ ssl: 465, none: 25 }[g.smtp_security.value] || 587);
+    ['cookies', 'disk', 'failures', 'updates'].forEach(function (k) { body[k] = g[k].checked; });
+    if (g.telegram_token.value) body.telegram_token = g.telegram_token.value;
+    if (g.smtp_password.value) body.smtp_password = g.smtp_password.value;
+    return body;
+  }
+  $('f-alerts').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('settings/alerts', { method: 'PUT', body: alertBody(this) }).then(function () { hint('alerthint', '✓ Saved. Press "Send a test message" to check it works.'); loadSettings(); })
+      .catch(function (err) { hint('alerthint', err.message, true); });
+  });
+  function saveAlerts(hintId) {
+    return api('settings/alerts', { method: 'PUT', body: alertBody($('f-alerts')) }).then(function (r) { loadSettings(); return r; })
+      .catch(function (err) { hint(hintId, err.message, true); throw err; });
+  }
+  // Port follows the security choice while it's still one of the usual ports.
+  $('f-alerts').smtp_security.addEventListener('change', function () {
+    var port = $('f-alerts').smtp_port;
+    if (!port.value || ['25', '465', '587'].indexOf(port.value) >= 0) port.value = { ssl: 465, none: 25 }[this.value] || 587;
+  });
+  $('f-alerts').addEventListener('click', function (e) {
+    var saveTo = e.target.getAttribute('data-save'), channel = e.target.getAttribute('data-test');
+    if (saveTo) saveAlerts(saveTo).then(function () { hint(saveTo, '✓ Saved.'); }, function () { });
+    if (channel) {
+      var btn = e.target, to = channel === 'email' ? 'smtphint' : 'tghint';
+      btn.disabled = true;
+      hint(to, channel === 'email' ? 'Saving and sending a test email…' : 'Saving and sending a test message…');
+      saveAlerts(to).then(function () {
+        return api('settings/alerts/test?channel=' + channel, { method: 'POST' }).then(function (r) {
+          var x = r.results[0] || { ok: false, error: 'Nothing was sent.' };
+          hint(to, x.ok ? '✓ Sent. Check ' + (channel === 'email' ? 'the inbox (and the spam folder).' : 'Telegram.') : '✗ ' + x.error, !x.ok);
+        }, function (err) { hint(to, err.message, true); });
+      }, function () { }).finally(function () { btn.disabled = false; });
+    }
   });
 
   // Sign in -------------------------------------------------------------------------------

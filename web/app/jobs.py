@@ -131,7 +131,7 @@ class JobManager:
         return sum(1 for j in self.jobs.values() if j.status not in FINAL)
 
     def create(self, *, url: str, client: str, label: str, options: engine.Options, info: dict | None,
-               items: list[dict] | None = None, source: str = "api", ip: str | None = None,
+               items: list[dict] | None = None, source: str = "api", ip: str | None = None, country: str | None = None,
                user_agent: str | None = None, client_version: str | None = None) -> Job:
         info = info or {}
         with self.lock:
@@ -143,7 +143,7 @@ class JobManager:
                 site=info.get("extractor_key") or info.get("extractor"), items=items,
             )
             self.jobs[job.id] = job
-        store.log(job=job.id, ip=ip, user_agent=(user_agent or "")[:300], source=source,
+        store.log(job=job.id, ip=ip, country=country, user_agent=(user_agent or "")[:300], source=source,
                   client_version=client_version, url=url, title=job.title, site=job.site,
                   kind=options.kind + (" playlist" if items else ""), label=label, status="queued")
         self.pool.submit(self._run, job)

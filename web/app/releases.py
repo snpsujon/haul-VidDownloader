@@ -15,10 +15,10 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
-from . import apkinfo, config
+from . import apkinfo, config, extinfo, helperinfo, store as log_store
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 ABIS = ("universal", "arm64-v8a", "armeabi-v7a", "x86_64")
@@ -107,19 +107,33 @@ def public(base: str = "") -> dict:
     if a and a.get("apks"):
         out["android"] = {
             "version": a["versionName"], "version_code": a["versionCode"], "changelog": a.get("changelog", []),
-            "updated": a.get("updated"), "url": base + "/get/android",
+            "updated": a.get("updated"), "url": base + "/get/android", "min_supported": a.get("minSupported", 0),
             "apks": {abi: {"url": f"{base}/app/{v['file']}", "size": v["size"], "sha256": v["sha256"]}
                      for abi, v in a["apks"].items()},
         }
     for slot in ("extension", "helper"):
         r = d[slot]
-        if r and (r.get("file") or r.get("store_url") or r.get("builds")):
+        if r and (r.get("file") or r.get("store_url") or r.get("builds") or r.get("stores")):
             out[slot] = {
                 "version": r.get("version"), "notes": r.get("notes"), "updated": r.get("updated"),
                 "size": r.get("size"), "sha256": r.get("sha256"),
                 "url": base + f"/get/{slot}" if r.get("file") else None,
                 "store_url": r.get("store_url"),
             }
+            if slot == "extension":
+                stores = dict(r.get("stores") or {})
+                if r.get("store_url") and not stores:
+                    stores["chrome"] = r["store_url"]
+                builds = {"chromium": {**r, "version": r.get("file_version")}} if r.get("file") else {}
+                builds |= r.get("builds") or {}
+                out[slot]["stores"] = stores
+                # Links through the site, so clicks show on the Stats page.
+                out[slot]["store_links"] = {k: f"{base}/get/extension/store/{k}" for k in stores}
+                out[slot]["store_url"] = stores.get("chrome") or stores.get("edge") or next(iter(stores.values()), None)
+                out[slot]["builds"] = {
+                    k: {"url": base + ("/get/extension" if k == "chromium" else f"/get/extension/{k}"),
+                        "size": v["size"], "sha256": v["sha256"], "version": v.get("version") or r.get("version")}
+                    for k, v in builds.items()}
             if slot == "helper":
                 builds = {"windows": r} if r.get("file") else {}
                 builds |= r.get("builds") or {}
@@ -172,39 +186,72 @@ def _send(path: Path, name: str | None = None):
     return FileResponse(path, filename=name or path.name, media_type=media)
 
 
+def _count(request: Request, kind: str, detail: str | None = None) -> None:
+    """Counts a download for the Stats page. Resumed pieces of the same download don't count."""
+    rng = request.headers.get("range", "")
+    if rng and not rng.replace(" ", "").startswith("bytes=0-"):
+        return
+    from .main import client_country, client_ip
+    log_store.log_install(kind, detail, client_ip(request), client_country(request))
+
+
 @public_router.get("/app/{name}", include_in_schema=False)
-async def app_file(name: str):
+async def app_file(name: str, request: Request):
     a = load()["android"] or {}
     files = {v["file"] for v in (a.get("apks") or {}).values()}
     if name not in files:
         raise HTTPException(404, "That file isn't available.")
+    _count(request, "android", next((abi for abi, v in a["apks"].items() if v["file"] == name), None))
     return _send(root() / "android" / name)
 
 
 @public_router.get("/get/{slot}", tags=["downloads"], summary="The latest Android app, extension or PC helper")
-async def get_latest(slot: str):
+async def get_latest(slot: str, request: Request):
     d = load()
     if slot == "android":
         apks = (d["android"] or {}).get("apks") or {}
         pick = apks.get("universal") or next(iter(apks.values()), None)
         if not pick:
             raise HTTPException(404, "The app hasn't been uploaded yet.")
+        _count(request, "android", "universal" if "universal" in apks else next(iter(apks)))
         return _send(root() / "android" / pick["file"])
     if slot in ("extension", "helper"):
         r = d[slot] or {}
         if r.get("file"):
+            _count(request, slot, "zip" if slot == "extension" else "windows")
             return _send(root() / slot / r["file"])
         if r.get("store_url"):
+            _count(request, slot, "store")
             return RedirectResponse(r["store_url"])
         raise HTTPException(404, "That hasn't been uploaded yet.")
     raise HTTPException(404, "Unknown download.")
 
 
+@public_router.get("/get/extension/firefox", tags=["downloads"], summary="The Firefox build of the extension (.xpi)")
+async def get_extension_firefox(request: Request):
+    b = ((load()["extension"] or {}).get("builds") or {}).get("firefox")
+    if not b:
+        raise HTTPException(404, "The Firefox extension hasn't been uploaded yet.")
+    _count(request, "extension", "firefox-file")
+    return _send(root() / "extension" / b["file"])
+
+
+@public_router.get("/get/extension/store/{kind}", tags=["downloads"], summary="Go to the extension's page on a browser store (counted)")
+async def go_extension_store(kind: str, request: Request):
+    x = load()["extension"] or {}
+    url = (x.get("stores") or {}).get(kind) or (x.get("store_url") if kind == "chrome" else None)
+    if kind not in extinfo.STORES or not url:
+        raise HTTPException(404, "The extension isn't on that store.")
+    _count(request, "extension", kind)
+    return RedirectResponse(url)
+
+
 @public_router.get("/get/helper/{build}", tags=["downloads"], summary="The PC helper for macOS or Linux (raw binary)")
-async def get_helper_build(build: str):
+async def get_helper_build(build: str, request: Request):
     b = ((load()["helper"] or {}).get("builds") or {}).get(build)
     if build not in HELPER_BUILDS or not b:
         raise HTTPException(404, "That helper build hasn't been uploaded yet.")
+    _count(request, "helper", build)
     return _send(root() / "helper" / b["file"])
 
 
@@ -426,54 +473,118 @@ def admin_router(require_admin) -> APIRouter:
         _remove_files(root() / "android", {v["file"] for v in apk_rows.values()})
         return {"ok": True, "version": name, "version_code": code, "apks": sorted(apk_rows), "min_supported": minimum}
 
-    async def _upload_single(slot: str, version: str, notes: str, store_url: str | None,
-                             file: UploadFile | None, exts: tuple[str, ...], builds: dict | None = None):
-        prev = load()[slot] or {}
-        entry = {"version": version or prev.get("version"), "notes": notes, "updated": time.time(),
-                 "store_url": (store_url or "").strip() or None}
-        if entry["store_url"] and not entry["store_url"].startswith("https://"):
-            raise HTTPException(400, "The store link has to start with https://")
-        if _given(file):
-            if not file.filename.lower().endswith(exts):
-                raise HTTPException(400, f"Upload a {' or '.join(exts)} file.")
-            name = safe_name(file.filename)
-            try:
-                entry.update(await store(file, root() / slot / name))
-            except UploadError as e:
-                raise HTTPException(400, str(e))
-        elif prev.get("file"):
-            entry.update({k: prev[k] for k in ("file", "size", "sha256")})
-        if builds is not None:
-            # Builds not picked this time are kept from the last upload.
-            entry["builds"] = dict(prev.get("builds") or {})
-            for name, f in builds.items():
-                if _given(f):
-                    try:
-                        entry["builds"][name] = await store(f, root() / slot / f"haul-helper-{name}")
-                    except UploadError as e:
-                        raise HTTPException(400, str(e))
-        if not entry.get("file") and not entry["store_url"] and not entry.get("builds"):
-            raise HTTPException(400, "Upload a file" + (" or add a store link." if slot == "extension" else "."))
-        with _lock:
-            d = load()
-            d[slot] = entry
-            _save(d)
-        _remove_files(root() / slot, {entry.get("file")} | {b["file"] for b in (entry.get("builds") or {}).values()})
-        return {"ok": True}
-
-    @r.post("/extension", summary="Publish the browser extension (a .zip, a store link, or both)")
+    @r.post("/extension", summary="Publish the browser extension: store links per browser, and/or the package files")
     async def upload_extension(version: str = Form("", max_length=40), notes: str = Form("", max_length=2000),
-                               store_url: str = Form("", max_length=500), file: UploadFile | None = File(None),
+                               store_chrome: str | None = Form(None, max_length=500),
+                               store_edge: str | None = Form(None, max_length=500),
+                               store_firefox: str | None = Form(None, max_length=500),
+                               store_opera: str | None = Form(None, max_length=500),
+                               store_url: str = Form("", max_length=500),
+                               all_stores: bool = Form(False),
+                               packages: list[UploadFile] = File(default_factory=list),
+                               file: UploadFile | None = File(None),
                                staged: list[str] = Form(default_factory=list)):
         st = StagedSet(staged)
         try:
-            return await _upload_single("extension", version, notes, store_url,
-                                        file if _given(file) else st.one("file"), (".zip", ".crx"))
+            picked = [f for f in [*packages, *st.all("packages"), file if _given(file) else st.one("file")] if _given(f)]
+            links = {"chrome": store_chrome, "edge": store_edge, "firefox": store_firefox, "opera": store_opera}
+            if all_stores:
+                # The admin form sends every box; an empty one removes that link. (Form turns
+                # an empty box into None, so without this flag None means "not sent, keep it".)
+                links = {k: v or "" for k, v in links.items()}
+            if store_url.strip() and links["chrome"] is None:
+                links["chrome"] = store_url  # the old form's single link
+            return await _publish_extension(version.strip(), notes.strip(), links, picked)
         finally:
             st.close()
 
-    @r.post("/helper", summary="Publish the PC helper (Windows .exe, plus macOS and Linux builds)")
+    async def _publish_extension(version: str, notes: str, links: dict, picked: list):
+        prev = load()["extension"] or {}
+        stores = dict(prev.get("stores") or ({"chrome": prev["store_url"]} if prev.get("store_url") else {}))
+        for kind, url in links.items():
+            if url is None:
+                continue  # not on the form: keep what's there
+            url = url.strip()
+            if not url:
+                stores.pop(kind, None)
+                continue
+            err = extinfo.store_error(kind, url)
+            if err:
+                raise HTTPException(400, err)
+            stores[kind] = url
+        staging = root() / "extension" / f".incoming-{secrets.token_hex(4)}"
+        found: dict[str, dict] = {}
+        try:
+            for i, f in enumerate(picked):
+                if not f.filename.lower().endswith((".zip", ".crx", ".xpi")):
+                    raise HTTPException(400, f"{f.filename}: pick the extension's .zip, .crx or .xpi file.")
+                tmp = staging / str(i)
+                try:
+                    stored = await store(f, tmp)
+                    info = extinfo.read(tmp, f.filename)
+                except (UploadError, extinfo.NotAnExtension) as e:
+                    raise HTTPException(400, str(e))
+                if info["build"] in found:
+                    raise HTTPException(400, f"Two of these files are both for {extinfo.BUILDS[info['build']]}. Pick one of each.")
+                found[info["build"]] = {**stored, "version": info["version"], "tmp": tmp, "name": f.filename}
+            entry = {"version": version or next((v["version"] for v in found.values() if v["version"]), None) or prev.get("version"),
+                     "notes": notes, "updated": time.time(), "stores": stores,
+                     "store_url": stores.get("chrome") or stores.get("edge") or next(iter(stores.values()), None),
+                     "builds": dict(prev.get("builds") or {})}
+            if prev.get("file"):
+                entry.update({k: prev[k] for k in ("file", "size", "sha256")})
+                entry["file_version"] = prev.get("file_version") or prev.get("version")
+            for build, v in found.items():
+                ext = Path(v["name"]).suffix.lower()
+                name = f"haul-extension-{v['version'] or 'latest'}{'-firefox' if build == 'firefox' and ext != '.xpi' else ''}{ext}"
+                name = safe_name(name)
+                v["tmp"].replace(root() / "extension" / name)
+                row = {"file": name, "size": v["size"], "sha256": v["sha256"], "version": v["version"]}
+                if build == "chromium":
+                    entry.update({k: row[k] for k in ("file", "size", "sha256")})
+                    entry["file_version"] = v["version"]
+                else:
+                    entry["builds"][build] = row
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+        if not entry.get("file") and not entry["builds"] and not stores:
+            raise HTTPException(400, "Add a store link or drop the extension's .zip.")
+        with _lock:
+            d = load()
+            d["extension"] = entry
+            _save(d)
+        _remove_files(root() / "extension", {entry.get("file")} | {b["file"] for b in entry["builds"].values()})
+        return {"ok": True, "version": entry["version"], "packages": [{"chromium": "Chrome .zip", "firefox": "Firefox file"}[b] + (f" {v['version']}" if v["version"] else "") for b, v in found.items()],
+                "stores": [extinfo.STORES[k][0] for k in ("chrome", "edge", "firefox", "opera") if k in stores]}
+
+    @r.delete("/extension/{kind}/{part}", summary="Remove one store link (store/chrome…) or package (package/chromium, package/firefox)")
+    async def remove_extension_part(kind: str, part: str):
+        with _lock:
+            d = load()
+            x = d["extension"] or {}
+            if kind == "store" and part in extinfo.STORES:
+                (x.get("stores") or {}).pop(part, None)
+                if part == "chrome" and not x.get("stores"):
+                    x["store_url"] = None
+            elif kind == "package" and part == "chromium":
+                for k in ("file", "size", "sha256", "file_version"):
+                    x.pop(k, None)
+            elif kind == "package" and part == "firefox":
+                (x.get("builds") or {}).pop("firefox", None)
+            else:
+                raise HTTPException(404, "Unknown part.")
+            if x:
+                s_ = x.get("stores") or {}
+                x["store_url"] = s_.get("chrome") or s_.get("edge") or next(iter(s_.values()), None)
+            d["extension"] = x if (x.get("file") or x.get("builds") or x.get("stores") or x.get("store_url")) else None
+            _save(d)
+        x = d["extension"] or {}
+        _remove_files(root() / "extension", {x.get("file")} | {b["file"] for b in (x.get("builds") or {}).values()})
+        return {"ok": True}
+
+    @r.post("/helper", summary="Publish the PC helper: drop the files, each one's system and version are read from it")
     async def upload_helper(version: str = Form("", max_length=40), notes: str = Form("", max_length=2000),
+                            helpers: list[UploadFile] = File(default_factory=list),
                             file: UploadFile | None = File(None),
                             mac: UploadFile | None = File(None),
                             linux_x64: UploadFile | None = File(None, alias="linux-x64"),
@@ -481,18 +592,66 @@ def admin_router(require_admin) -> APIRouter:
                             staged: list[str] = Form(default_factory=list)):
         st = StagedSet(staged)
         try:
-            return await _publish_helper(version, notes, file if _given(file) else st.one("file"), {
-                "mac": mac if _given(mac) else st.one("mac"),
-                "linux-x64": linux_x64 if _given(linux_x64) else st.one("linux-x64"),
-                "linux-arm64": linux_arm64 if _given(linux_arm64) else st.one("linux-arm64")})
+            picked = [(None, f) for f in [*helpers, *st.all("helpers")]]
+            for slot, f in (("windows", file if _given(file) else st.one("file")),
+                            ("mac", mac if _given(mac) else st.one("mac")),
+                            ("linux-x64", linux_x64 if _given(linux_x64) else st.one("linux-x64")),
+                            ("linux-arm64", linux_arm64 if _given(linux_arm64) else st.one("linux-arm64"))):
+                picked.append((slot, f))
+            return await _publish_helper(version.strip(), notes, [(s, f) for s, f in picked if _given(f)])
         finally:
             st.close()
 
-    async def _publish_helper(version, notes, file, builds):
-        for f in builds.values():
-            if _given(f) and f.filename.lower().endswith((".exe", ".msi", ".zip", ".dmg", ".html")):
-                raise HTTPException(400, f"{f.filename} doesn't look like a Mac or Linux helper. Upload haul-helper-mac or haul-helper-linux-….")
-        return await _upload_single("helper", version, notes, None, file, (".exe", ".zip", ".msi"), builds)
+    async def _publish_helper(version: str, notes: str, picked: list):
+        prev = load()["helper"] or {}
+        if not picked and not prev:
+            raise HTTPException(400, "Pick the helper files to publish.")
+        staging = root() / "helper" / f".incoming-{secrets.token_hex(4)}"
+        found: dict[str, dict] = {}
+        try:
+            for i, (declared, f) in enumerate(picked):
+                tmp = staging / str(i)
+                try:
+                    stored = await store(f, tmp)
+                except UploadError as e:
+                    raise HTTPException(400, f"{f.filename}: {e}")
+                info = helperinfo.read(tmp, f.filename)
+                system = info["system"]
+                if system is None:
+                    raise HTTPException(400, f"{f.filename} isn't a Windows, Mac or Linux program. Pick the files from the helper folder.")
+                if declared and declared != system:
+                    raise HTTPException(400, f"{f.filename} is for {helperinfo.SYSTEMS[system]}, not {helperinfo.SYSTEMS[declared]}.")
+                if system in found:
+                    raise HTTPException(400, f"Two of these files are for {helperinfo.SYSTEMS[system]}. Pick one of each.")
+                found[system] = {**stored, "version": info["version"], "tmp": tmp, "name": f.filename}
+            seen = {v["version"] for v in found.values() if v["version"]}
+            if not version and len(seen) > 1:
+                raise HTTPException(400, "These files are different helper versions (" + ", ".join(sorted(seen)) + "). Upload one version at a time.")
+            version = version or (seen.pop() if seen else None) or prev.get("version")
+            entry = {"version": version, "notes": notes.strip(), "updated": time.time(), "store_url": None,
+                     "builds": dict(prev.get("builds") or {})}
+            if prev.get("file"):
+                entry.update({k: prev[k] for k in ("file", "size", "sha256")})
+            for system, v in found.items():
+                if system == "windows":
+                    name = safe_name(v["name"])
+                    if not name.lower().endswith((".exe", ".msi", ".zip")):
+                        name = "haul-helper.exe"
+                    v["tmp"].replace(root() / "helper" / name)
+                    entry.update({"file": name, "size": v["size"], "sha256": v["sha256"]})
+                else:
+                    name = f"haul-helper-{system}"
+                    v["tmp"].replace(root() / "helper" / name)
+                    entry["builds"][system] = {"file": name, "size": v["size"], "sha256": v["sha256"]}
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+        with _lock:
+            d = load()
+            d["helper"] = entry
+            _save(d)
+        _remove_files(root() / "helper", {entry.get("file")} | {b["file"] for b in entry["builds"].values()})
+        return {"ok": True, "version": version,
+                "systems": [helperinfo.SYSTEMS[s] for s in ("windows", "mac", "linux-x64", "linux-arm64") if s in found]}
 
     @r.delete("/{slot}", summary="Stop offering the app, extension or helper")
     async def remove_slot(slot: str):
@@ -505,27 +664,45 @@ def admin_router(require_admin) -> APIRouter:
         shutil.rmtree(root() / slot, ignore_errors=True)
         return {"ok": True}
 
-    @r.post("/files", summary="Upload another file to offer on the page")
+    @r.post("/files", summary="Upload one or more files to offer on the page (titles[] in the same order)")
     async def upload_file(file: UploadFile | None = File(None), title: str = Form("", max_length=120),
+                          files: list[UploadFile] = File(default_factory=list),
+                          titles: list[str] = Form(default_factory=list),
                           staged: list[str] = Form(default_factory=list)):
         st = StagedSet(staged)
         try:
-            file = file if _given(file) else st.one("file")
-            if not _given(file):
+            picked = [(f, title) for f in [file if _given(file) else st.one("file")] if _given(f)]
+            picked += [(f, titles[i] if i < len(titles) else "") for i, f in enumerate([*files, *st.all("files")]) if _given(f)]
+            if not picked:
                 raise HTTPException(400, "Pick a file to upload.")
-            name = safe_name(file.filename)
-            try:
-                info = await store(file, root() / "files" / name)
-            except UploadError as e:
-                raise HTTPException(400, str(e))
+            rows = []
+            for f, t in picked:
+                name = safe_name(f.filename)
+                try:
+                    info = await store(f, root() / "files" / name)
+                except UploadError as e:
+                    raise HTTPException(400, f"{f.filename}: {e}")
+                rows.append({**info, "title": t.strip()[:120] or None, "updated": time.time()})
         finally:
             st.close()
         with _lock:
             d = load()
-            d["files"] = [f for f in d["files"] if f["file"] != name]
-            d["files"].append({**info, "title": title.strip() or None, "updated": time.time()})
+            names = {r["file"] for r in rows}
+            d["files"] = [f for f in d["files"] if f["file"] not in names] + rows
             _save(d)
-        return {"ok": True, "name": name}
+        return {"ok": True, "name": rows[0]["file"], "names": [r["file"] for r in rows]}
+
+    @r.patch("/files/{name}", summary="Change the title shown for a file")
+    async def retitle_file(name: str, body: dict = Body(...)):
+        title = str(body.get("title") or "")[:120]
+        with _lock:
+            d = load()
+            row = next((f for f in d["files"] if f["file"] == name), None)
+            if row is None:
+                raise HTTPException(404, "No such file.")
+            row["title"] = title.strip() or None
+            _save(d)
+        return {"ok": True}
 
     @r.delete("/files/{name}", summary="Remove an uploaded file")
     async def delete_file(name: str):

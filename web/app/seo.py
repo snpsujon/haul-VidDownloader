@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 
-from . import config
+from . import settings, config
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
@@ -182,7 +182,16 @@ def _render(slug: str | None, base: str, mtime: float) -> str:
 
 def render(slug: str | None, request: Request) -> HTMLResponse:
     mtime = (STATIC / "index.html").stat().st_mtime
-    return HTMLResponse(_render(slug, base_url(request), mtime))
+    out = _render(slug, base_url(request), mtime)
+    name = settings.load()["site_name"] or "Haul"
+    if name != "Haul":
+        # The name set on the admin page, in the title and the tags search engines and link previews read.
+        head, _, body = out.partition("</head>")
+        n = _e(name)
+        head = (head.replace(" · Haul</title>", f" · {n}</title>").replace("<title>Haul:", f"<title>{n}:")
+                .replace('content="Haul">', f'content="{n}">').replace('"name": "Haul"', '"name": ' + json.dumps(name).replace("<", "\\u003c")))
+        out = head + "</head>" + body
+    return HTMLResponse(out)
 
 
 router = APIRouter(include_in_schema=False)

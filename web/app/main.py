@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field, model_validator
 
-from . import config, cookies, engine, media, security, store, upkeep
+from . import config, cookies, engine, media, security, settings, store, upkeep
 from .jobs import FINAL, JobManager, LimitReached
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -78,6 +78,9 @@ app.add_middleware(
 
 def client_ip(request: Request) -> str:
     if config.TRUST_PROXY_HEADERS:
+        cf = request.headers.get("cf-connecting-ip")
+        if cf:
+            return cf.strip()
         fwd = request.headers.get("x-forwarded-for")
         if fwd:
             return fwd.split(",")[0].strip()
@@ -85,6 +88,27 @@ def client_ip(request: Request) -> str:
         if real:
             return real.strip()
     return request.client.host if request.client else "unknown"
+
+
+def client_country(request: Request) -> str | None:
+    """Two-letter country from the proxy in front (Cloudflare sends CF-IPCountry), for stats."""
+    for h in ("cf-ipcountry", "x-country-code", "x-geo-country"):
+        v = (request.headers.get(h) or "").strip().upper()
+        if len(v) == 2 and v.isalpha() and v not in ("XX", "T1"):
+            return v
+    return None
+
+
+def check_visitor(request: Request) -> None:
+    """Refuses blocked addresses."""
+    if settings.banned(client_ip(request)):
+        raise HTTPException(403, "This address is blocked from using the downloader.")
+
+
+def check_daily_limit(request: Request) -> None:
+    limit = settings.load()["daily_limit"]
+    if limit and store.count_ip(client_ip(request), time.time() - 86400) >= limit:
+        raise HTTPException(429, f"You've reached the limit of {limit} downloads a day. Try again tomorrow.")
 
 
 def client_source(request: Request) -> tuple[str, str | None]:
@@ -100,6 +124,7 @@ def client_source(request: Request) -> tuple[str, str | None]:
 
 def require_key(request: Request, key: str | None = Query(None, description="API key, for links and event streams")) -> str:
     """Returns the caller's id: their API key when keys are on, otherwise their IP."""
+    check_visitor(request)
     if not config.API_KEYS:
         return client_ip(request)
     given = request.headers.get("x-api-key") or key
@@ -198,7 +223,8 @@ async def health():
         "admin": bool(config.ADMIN_PASSWORD),
         "cookies": {"present": c.get("present", False), "ok": c.get("ok")},
         "extension_ids": config.EXTENSION_IDS,
-        "contact_email": config.CONTACT_EMAIL,
+        "contact_email": settings.contact_email(),
+        "site": settings.public(),
         "limits": {
             "max_filesize_mb": config.MAX_FILESIZE_MB,
             "max_duration_min": config.MAX_DURATION_MIN,
@@ -209,6 +235,11 @@ async def health():
             "max_active_per_client": config.MAX_ACTIVE_PER_CLIENT,
         },
     }
+
+
+@app.get("/api/site", tags=["server"], summary="The site's name, announcement banner and contact email")
+async def site_info():
+    return settings.public()
 
 
 @app.post("/api/info", tags=["media"], summary="Title, thumbnail and format choices for a link")
@@ -243,6 +274,7 @@ async def direct_links(url: str, request: Request, format: str | None = Query(No
 
 
 async def start_job(request: Request, body: JobRequest, who: str, source: str | None = None):
+    check_visitor(request)
     src, ver = client_source(request)
     source = source or src
     lang = body.language or None
@@ -309,10 +341,12 @@ async def start_job(request: Request, body: JobRequest, who: str, source: str | 
 
 
 def _create(request, who, url, label, opts, data, items, source, ver):
+    check_visitor(request)
+    check_daily_limit(request)
     try:
         return app.state.jobs.create(
             url=url, client=who, label=label, options=opts, info=data, items=items, source=source,
-            ip=client_ip(request), user_agent=request.headers.get("user-agent"), client_version=ver,
+            ip=client_ip(request), country=client_country(request), user_agent=request.headers.get("user-agent"), client_version=ver,
         )
     except LimitReached:
         raise HTTPException(429, f"You already have {config.MAX_ACTIVE_PER_CLIENT} downloads running. Wait for one to finish.")
