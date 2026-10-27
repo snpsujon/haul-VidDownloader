@@ -42,7 +42,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import app.haul.HaulApp
 import app.haul.MainActivity
+import app.haul.BuildConfig
 import app.haul.data.AppSettings
+import app.haul.data.Pairing
 import app.haul.data.MediaType
 import app.haul.data.ShareAction
 import app.haul.engine.DownloadRequest
@@ -70,6 +72,11 @@ class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        val link = intent?.data
+        if (link?.scheme == "haul" && link.host == "pair") {
+            showPair(link.toString())
+            return
+        }
         val text = intent?.data?.takeIf { it.scheme == "haul" }?.getQueryParameter("url")
             ?: intent?.getStringExtra(Intent.EXTRA_TEXT) ?: intent?.dataString
         val url = Links.extract(text)
@@ -93,6 +100,30 @@ class ShareActivity : ComponentActivity() {
                         ShareSheet(url, settings, onClose = { finish() })
                     }
                 }
+            }
+        }
+    }
+
+    private fun showPair(link: String) {
+        val pairing = Pairing.fromLink(link, BuildConfig.DEBUG)
+        if (pairing == null) {
+            Toast.makeText(this, "That pairing link isn't valid. Make a new one in your browser.", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        val g = HaulApp.graph(this)
+        setContent {
+            val settings by g.settings.settings.collectAsState(AppSettings())
+            HaulTheme(settings.theme, settings.wallpaperColours) {
+                PairSheet(
+                    pairing,
+                    onConnect = { g.pcInbox.connect(pairing) },
+                    onConnected = {
+                        Toast.makeText(this, "Connected to ${pairing.host}.", Toast.LENGTH_SHORT).show()
+                        finish()
+                    },
+                    onClose = { finish() },
+                )
             }
         }
     }

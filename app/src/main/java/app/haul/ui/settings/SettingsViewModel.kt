@@ -14,6 +14,7 @@ import app.haul.data.AppSettings
 import app.haul.data.AudioFormat
 import app.haul.data.Channel
 import app.haul.data.AppSettings.Companion.DEFAULT_FOLDER_LABEL
+import app.haul.data.Pairing
 import app.haul.data.ShareAction
 import app.haul.data.Site
 import app.haul.data.SubtitleMode
@@ -118,6 +119,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun finishSignIn(site: Site, onResult: (Boolean) -> Unit) = viewModelScope.launch { onResult(g.accounts.finishSignIn(site)) }
     fun signOut(site: Site) = viewModelScope.launch { g.accounts.signOut(site) }
+    fun removePairing(p: Pairing) = viewModelScope.launch { g.pcInbox.remove(p) }
 
     // Appearance and updates ---------------------------------------------------------------------
 

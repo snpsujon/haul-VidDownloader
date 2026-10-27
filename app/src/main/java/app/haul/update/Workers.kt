@@ -16,6 +16,7 @@ import app.haul.HaulApp
 import app.haul.MainActivity
 import app.haul.R
 import app.haul.download.Notifications
+import app.haul.share.PcInboxWorker
 import java.util.concurrent.TimeUnit
 
 /** Keeps yt-dlp current: at most once a day, on Wi-Fi, when "Update automatically" is on. */
@@ -62,6 +63,7 @@ class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
 object Schedules {
     fun schedule(context: Context) {
+        PcInboxWorker.schedule(context)
         val wm = WorkManager.getInstance(context)
         wm.enqueueUniquePeriodicWork(
             "engine-update",

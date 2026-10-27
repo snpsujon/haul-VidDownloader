@@ -57,12 +57,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-            <!-- haul://save?url=<encoded link>, e.g. from a QR code made by the browser extension. -->
+            <!-- From QR codes made by the browser extension: haul://save?url=<encoded link>,
+                 and haul://pair?site=…&amp;id=…&amp;token=… to pair for "send to phone". -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="haul" android:host="save" />
+                <data android:scheme="haul" android:host="pair" />
             </intent-filter>
         </activity>
 

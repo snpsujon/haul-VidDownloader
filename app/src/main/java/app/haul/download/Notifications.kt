@@ -127,6 +127,20 @@ object Notifications {
         runCatching { NotificationManagerCompat.from(context).notify(itemTag(item.id), 0, n) }
     }
 
+    /** A link sent from a paired browser was added to the queue. */
+    fun fromPc(context: Context, title: String, id: Long) {
+        if (!canPost(context)) return
+        val n = NotificationCompat.Builder(context, CHANNEL_FINISHED)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(SIGNAL)
+            .setContentTitle("From your PC: $title")
+            .setContentText("Added to the queue.")
+            .setContentIntent(openApp(context, "queue", id))
+            .setAutoCancel(true)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(itemTag(id), 0, n) }
+    }
+
     fun cancelItem(context: Context, id: Long) {
         NotificationManagerCompat.from(context).cancel(itemTag(id), 0)
     }

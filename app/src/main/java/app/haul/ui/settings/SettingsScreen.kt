@@ -50,6 +50,7 @@ import app.haul.ui.components.SettingsRow
 import app.haul.ui.components.SnackState
 import app.haul.ui.components.Stepper
 import app.haul.ui.components.T
+import app.haul.ui.components.TextAction
 import app.haul.ui.components.TitleBar
 import app.haul.ui.components.Trailing
 import app.haul.ui.components.mono
@@ -106,6 +107,22 @@ fun SettingsScreen(
                         if (n == 0) "For private, members-only and age-restricted videos" else "$n signed in",
                         onAccounts, first = true,
                     )
+                }
+                SettingsGroup("PAIRED BROWSERS") {
+                    if (s.pairings.isEmpty()) {
+                        SettingsRow(
+                            "No browsers paired", "Scan the pairing QR code from the Haul browser extension",
+                            null, first = true, trailing = Trailing.None,
+                        )
+                    }
+                    s.pairings.forEachIndexed { i, p ->
+                        SettingsRow(
+                            p.host, "Links sent from it download here", null, first = i == 0, monoSubtitle = false,
+                            trailingContent = {
+                                TextAction("Remove", { vm.removePairing(p); snack.show("Removed ${p.host}.") }, color = c.textMid)
+                            },
+                        )
+                    }
                 }
                 SettingsGroup("DOWNLOAD ENGINE") {
                     val v = vm.engineVersion ?: s.ytdlpBundledVersion ?: "…"

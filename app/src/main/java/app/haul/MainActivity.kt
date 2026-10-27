@@ -74,6 +74,9 @@ import app.haul.ui.theme.HaulTheme
 import app.haul.ui.update.InstallScreen
 import app.haul.ui.update.UpdatePromptSheet
 import app.haul.util.CrashReports
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -172,6 +175,17 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
     if (info != null && info.required && s.onboarded) {
         Box(Modifier.fillMaxSize().statusBarsPadding()) { InstallScreen(info, required = true, onLater = {}) }
         return
+    }
+
+    // Links sent from a paired browser: check on open and every 10 s while the app is in front.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                g.pcInbox.poll()
+                delay(10_000)
+            }
+        }
     }
 
     // Notifications, shares and the media session land here.

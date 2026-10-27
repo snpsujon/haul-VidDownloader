@@ -55,6 +55,8 @@ data class AppSettings(
     val subtitleMode: SubtitleMode = SubtitleMode.EMBED,
     /** Ids of the sites signed in to from Settings → Accounts. */
     val signedInSites: Set<String> = emptySet(),
+    /** Browsers paired for "send to phone". */
+    val pairings: List<Pairing> = emptyList(),
 ) {
     /** "1080p MP4" */
     val videoPresetLabel: String get() = "${videoHeight}p ${videoContainer.uppercase()}"
@@ -111,6 +113,7 @@ class SettingsRepository(private val context: Context) {
         val subtitleLang = stringPreferencesKey("subtitle_lang")
         val subtitleMode = stringPreferencesKey("subtitle_mode")
         val signedInSites = stringSetPreferencesKey("signed_in_sites")
+        val pairings = stringPreferencesKey("pairings")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -139,6 +142,7 @@ class SettingsRepository(private val context: Context) {
             subtitleLang = p[K.subtitleLang] ?: "",
             subtitleMode = p[K.subtitleMode]?.let { runCatching { SubtitleMode.valueOf(it) }.getOrNull() } ?: SubtitleMode.EMBED,
             signedInSites = p[K.signedInSites] ?: emptySet(),
+            pairings = Pairing.decode(p[K.pairings]),
         )
     }
 
@@ -171,6 +175,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppUpdateCheck(on: Boolean) = context.dataStore.edit { it[K.appUpdateCheck] = on }
     suspend fun setAppLastCheck(t: Long) = context.dataStore.edit { it[K.appLastCheck] = t }
     suspend fun setSkippedVersion(code: Int) = context.dataStore.edit { it[K.skippedVersion] = code }
+    suspend fun updatePairings(change: (List<Pairing>) -> List<Pairing>) = context.dataStore.edit {
+        it[K.pairings] = Pairing.encode(change(Pairing.decode(it[K.pairings])))
+    }
     suspend fun setSignedIn(siteId: String, on: Boolean) = context.dataStore.edit {
         val now = it[K.signedInSites] ?: emptySet()
         it[K.signedInSites] = if (on) now + siteId else now - siteId
