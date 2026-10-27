@@ -223,10 +223,104 @@ async def other_file(name: str):
     return _send(root() / "files" / name)
 
 
+# Uploads in pieces ---------------------------------------------------------------------------
+# Proxies in front of the server (nginx defaults to 1 MB, Cloudflare to 100 MB) refuse big
+# requests, so the admin page sends each file in small pieces first, then publishes with
+# references to them ("staged" form fields: {"id", "name", "field"} as JSON).
+
+STAGE_TTL = 86400
+
+
+def _stage_dir() -> Path:
+    return root() / ".uploads"
+
+
+def _stage_path(upload_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{32}", upload_id or ""):
+        raise HTTPException(404, "Unknown upload.")
+    return _stage_dir() / upload_id
+
+
+class Staged:
+    """Looks like an UploadFile to store(): a filename and an async read()."""
+
+    def __init__(self, path: Path, filename: str):
+        self.path, self.filename, self._f = path, filename, None
+
+    async def read(self, n: int = -1) -> bytes:
+        if self._f is None:
+            self._f = self.path.open("rb")
+        return self._f.read(n)
+
+    def close(self) -> None:
+        if self._f:
+            self._f.close()
+        self.path.unlink(missing_ok=True)
+
+
+class StagedSet:
+    def __init__(self, raw: list[str]):
+        self.by_field: dict[str, list[Staged]] = {}
+        for item in raw:
+            try:
+                d = json.loads(item)
+                path = _stage_path(str(d["id"]))
+            except (ValueError, KeyError, TypeError):
+                raise HTTPException(400, "A piece of the upload went missing. Try again.")
+            if not path.is_file():
+                raise HTTPException(400, "A piece of the upload went missing. Try again.")
+            self.by_field.setdefault(str(d.get("field") or "file"), []).append(Staged(path, str(d.get("name") or "file")))
+
+    def all(self, field: str) -> list:
+        return self.by_field.get(field, [])
+
+    def one(self, field: str):
+        return next(iter(self.all(field)), None)
+
+    def close(self) -> None:
+        for files in self.by_field.values():
+            for f in files:
+                f.close()
+
+
+def _sweep_stages() -> None:
+    d = _stage_dir()
+    if d.is_dir():
+        for f in d.iterdir():
+            if f.stat().st_mtime < time.time() - STAGE_TTL:
+                f.unlink(missing_ok=True)
+
+
 # Admin -------------------------------------------------------------------------------------
 
 def admin_router(require_admin) -> APIRouter:
     r = APIRouter(prefix="/api/admin/releases", tags=["admin"], dependencies=[Depends(require_admin)])
+
+    @r.post("/uploads", summary="Start a file upload that's sent in pieces")
+    async def start_upload():
+        _sweep_stages()
+        _stage_dir().mkdir(parents=True, exist_ok=True)
+        upload_id = secrets.token_hex(16)
+        _stage_path(upload_id).touch()
+        return {"id": upload_id}
+
+    @r.put("/uploads/{upload_id}", summary="Add the next piece (the raw bytes) at the given offset")
+    async def add_piece(upload_id: str, request: Request, offset: int = 0):
+        path = _stage_path(upload_id)
+        if not path.is_file():
+            raise HTTPException(404, "Unknown upload.")
+        size = path.stat().st_size
+        if offset != size:
+            return JSONResponse({"detail": "Wrong offset.", "size": size}, status_code=409)
+        limit = config.MAX_UPLOAD_MB * 1024 * 1024
+        with path.open("ab") as out:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > limit:
+                    out.truncate(offset)
+                    raise HTTPException(400, f"That file is bigger than the upload limit ({config.MAX_UPLOAD_MB} MB).")
+                out.write(chunk)
+        return {"size": size}
 
     @r.get("", summary="Everything uploaded, with file details")
     async def list_all(request: Request):
@@ -245,10 +339,20 @@ def admin_router(require_admin) -> APIRouter:
         arm64_v8a: UploadFile | None = File(None, alias="arm64-v8a"),
         armeabi_v7a: UploadFile | None = File(None, alias="armeabi-v7a"),
         x86_64: UploadFile | None = File(None),
+        staged: list[str] = Form(default_factory=list),
     ):
         """Drop the APKs; the version and CPU type are read from each one. A version.json from
         scripts/package_release.py can come along for its changelog and minimum version."""
-        files = [f for f in [*apks, universal, arm64_v8a, armeabi_v7a, x86_64] if _given(f)]
+        st = StagedSet(staged)
+        try:
+            return await _publish_android(
+                [f for f in [*apks, *st.all("apks"), universal, arm64_v8a, armeabi_v7a, x86_64] if _given(f)],
+                version_file if _given(version_file) else st.one("version_file"),
+                changelog, force_update, version_name, version_code, min_supported)
+        finally:
+            st.close()
+
+    async def _publish_android(files, version_file, changelog, force_update, version_name, version_code, min_supported):
         if not files:
             raise HTTPException(400, "Pick the APK to publish (app-universal-release.apk works on every phone).")
         extra: dict = {}
@@ -359,16 +463,32 @@ def admin_router(require_admin) -> APIRouter:
 
     @r.post("/extension", summary="Publish the browser extension (a .zip, a store link, or both)")
     async def upload_extension(version: str = Form("", max_length=40), notes: str = Form("", max_length=2000),
-                               store_url: str = Form("", max_length=500), file: UploadFile | None = File(None)):
-        return await _upload_single("extension", version, notes, store_url, file, (".zip", ".crx"))
+                               store_url: str = Form("", max_length=500), file: UploadFile | None = File(None),
+                               staged: list[str] = Form(default_factory=list)):
+        st = StagedSet(staged)
+        try:
+            return await _upload_single("extension", version, notes, store_url,
+                                        file if _given(file) else st.one("file"), (".zip", ".crx"))
+        finally:
+            st.close()
 
     @r.post("/helper", summary="Publish the PC helper (Windows .exe, plus macOS and Linux builds)")
     async def upload_helper(version: str = Form("", max_length=40), notes: str = Form("", max_length=2000),
                             file: UploadFile | None = File(None),
                             mac: UploadFile | None = File(None),
                             linux_x64: UploadFile | None = File(None, alias="linux-x64"),
-                            linux_arm64: UploadFile | None = File(None, alias="linux-arm64")):
-        builds = {"mac": mac, "linux-x64": linux_x64, "linux-arm64": linux_arm64}
+                            linux_arm64: UploadFile | None = File(None, alias="linux-arm64"),
+                            staged: list[str] = Form(default_factory=list)):
+        st = StagedSet(staged)
+        try:
+            return await _publish_helper(version, notes, file if _given(file) else st.one("file"), {
+                "mac": mac if _given(mac) else st.one("mac"),
+                "linux-x64": linux_x64 if _given(linux_x64) else st.one("linux-x64"),
+                "linux-arm64": linux_arm64 if _given(linux_arm64) else st.one("linux-arm64")})
+        finally:
+            st.close()
+
+    async def _publish_helper(version, notes, file, builds):
         for f in builds.values():
             if _given(f) and f.filename.lower().endswith((".exe", ".msi", ".zip", ".dmg", ".html")):
                 raise HTTPException(400, f"{f.filename} doesn't look like a Mac or Linux helper. Upload haul-helper-mac or haul-helper-linux-….")
@@ -386,12 +506,20 @@ def admin_router(require_admin) -> APIRouter:
         return {"ok": True}
 
     @r.post("/files", summary="Upload another file to offer on the page")
-    async def upload_file(file: UploadFile = File(...), title: str = Form("", max_length=120)):
-        name = safe_name(file.filename)
+    async def upload_file(file: UploadFile | None = File(None), title: str = Form("", max_length=120),
+                          staged: list[str] = Form(default_factory=list)):
+        st = StagedSet(staged)
         try:
-            info = await store(file, root() / "files" / name)
-        except UploadError as e:
-            raise HTTPException(400, str(e))
+            file = file if _given(file) else st.one("file")
+            if not _given(file):
+                raise HTTPException(400, "Pick a file to upload.")
+            name = safe_name(file.filename)
+            try:
+                info = await store(file, root() / "files" / name)
+            except UploadError as e:
+                raise HTTPException(400, str(e))
+        finally:
+            st.close()
         with _lock:
             d = load()
             d["files"] = [f for f in d["files"] if f["file"] != name]

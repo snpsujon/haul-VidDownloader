@@ -1,4 +1,5 @@
 import io
+import json
 import time
 import zipfile
 from pathlib import Path
@@ -6,7 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import config, engine, main
+from app import config, engine, main, releases
 from tests.fake_info import youtube_info
 
 URL = "https://www.youtube.com/watch?v=abc"
@@ -418,3 +419,28 @@ def test_supported_sites_page(client):
     assert 'data-n="youtube"' in r.text and 'data-n="generic"' not in r.text
     assert r.text.count("<li data-n=") > 1000
     assert 'href="sites"' in client.get("/").text
+
+
+def test_upload_in_pieces_then_publish(client, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+    client.delete("/api/admin/releases/android", headers=h)
+    apk = make_apk(["arm64-v8a"])
+    up = client.post("/api/admin/releases/uploads", headers=h).json()["id"]
+    half = len(apk) // 2
+    assert client.put(f"/api/admin/releases/uploads/{up}?offset=0", headers=h, content=apk[:half]).json()["size"] == half
+    # A repeated piece is refused with the size the server has, so the page can carry on.
+    again = client.put(f"/api/admin/releases/uploads/{up}?offset=0", headers=h, content=apk[:half])
+    assert again.status_code == 409 and again.json()["size"] == half
+    client.put(f"/api/admin/releases/uploads/{up}?offset={half}", headers=h, content=apk[half:])
+    r = client.post("/api/admin/releases/android", headers=h,
+                    data={"staged": json.dumps({"id": up, "name": "app-arm64-v8a-release.apk", "field": "apks"})})
+    assert r.status_code == 200, r.text
+    assert r.json()["apks"] == ["arm64-v8a"] and client.get("/get/android").content == apk
+    assert not list((releases.root() / ".uploads").iterdir())  # pieces are cleaned up
+    # Unknown or malformed upload ids are refused.
+    assert client.put("/api/admin/releases/uploads/not-an-id", headers=h, content=b"x").status_code == 404
+    bad = client.post("/api/admin/releases/files", headers=h, data={"staged": json.dumps({"id": "0" * 32, "field": "file"})})
+    assert bad.status_code == 400
+    assert client.put(f"/api/admin/releases/uploads/{'a' * 32}", content=b"x").status_code == 401
+    client.delete("/api/admin/releases/android", headers=h)

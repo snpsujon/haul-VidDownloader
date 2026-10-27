@@ -307,32 +307,70 @@
     hint('relhint', '');
     setText('Starting upload…');
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api/admin/releases/' + path);
-    xhr.setRequestHeader('X-Admin-Token', token);
-    xhr.upload.onprogress = function (e) {
-      if (!e.lengthComputable) return;
-      var pct = e.loaded / e.total * 100, secs = (Date.now() - started) / 1000, speed = e.loaded / Math.max(secs, 0.1);
-      var left = speed > 0 ? (e.total - e.loaded) / speed : 0;
+    // Files go up first in pieces (so a proxy's size limit never blocks them), then the form
+    // is published with references to them.
+    var fd = data || new FormData(form), files = [], rest = [];
+    fd.forEach(function (v, k) { if (v instanceof File && v.name && v.size > 0) files.push([k, v]); else if (!(v instanceof File)) rest.push([k, v]); });
+    var total = files.reduce(function (n, f) { return n + f[1].size; }, 0), sent = 0;
+
+    function fail(msg) { finish(); box.classList.remove('working'); setText(msg, 'bad'); }
+    function req(method, url, body, cb, onprog) {
+      var x = new XMLHttpRequest();
+      x.open(method, url);
+      x.setRequestHeader('X-Admin-Token', token);
+      if (onprog) x.upload.onprogress = onprog;
+      x.onload = function () { var d = {}; try { d = JSON.parse(x.responseText); } catch (e) { } cb(x.status, d); };
+      x.onerror = function () { cb(0, {}); };
+      x.send(body);
+    }
+    function progress(done) {
+      var pct = total ? done / total * 100 : 100, secs = (Date.now() - started) / 1000, speed = done / Math.max(secs, 0.1);
+      var left = speed > 0 ? (total - done) / speed : 0;
       bar.style.width = pct + '%';
-      setText('Step 1 of 2 · Uploading ' + Math.floor(pct) + '% · ' + bytes(e.loaded) + ' of ' + bytes(e.total) + ' · ' +
+      setText('Step 1 of 2 · Uploading ' + Math.floor(pct) + '% · ' + bytes(done) + ' of ' + bytes(total) + ' · ' +
         bytes(speed) + '/s' + (left > 1 ? ' · about ' + (left > 90 ? Math.round(left / 60) + ' min' : Math.round(left) + ' s') + ' left' : ''));
-    };
-    xhr.upload.onload = function () {
+    }
+
+    var chunk = 8 * 1024 * 1024, MIN = 256 * 1024, staged = [];
+    function sendFile(i) {
+      if (i >= files.length) return publish();
+      var field = files[i][0], file = files[i][1];
+      req('POST', 'api/admin/releases/uploads', null, function (st, d) {
+        if (st === 401) { setToken(null); screen('login'); return; }
+        if (st !== 200 || !d.id) return fail('Couldn\'t start the upload (error ' + st + ').');
+        var offset = 0, tries = 0;
+        (function piece() {
+          if (offset >= file.size) { staged.push([field, JSON.stringify({ id: d.id, name: file.name, field: field })]); return sendFile(i + 1); }
+          var end = Math.min(offset + chunk, file.size);
+          req('PUT', 'api/admin/releases/uploads/' + d.id + '?offset=' + offset, file.slice(offset, end), function (st2, r) {
+            if (st2 === 200) { sent += end - offset; offset = end; tries = 0; return piece(); }
+            if (st2 === 413 && chunk > MIN) { chunk = Math.max(MIN, chunk / 4); return piece(); }   // the proxy wants smaller pieces
+            if (st2 === 409 && typeof r.size === 'number') { sent += r.size - offset; offset = r.size; return piece(); }
+            if ((st2 === 0 || st2 >= 500) && tries++ < 5) return setTimeout(piece, 1000 * tries);   // brief network trouble
+            if (st2 === 401) { setToken(null); screen('login'); return; }
+            fail(typeof r.detail === 'string' ? r.detail : st2 === 413 ? 'The proxy in front of the server refuses even small uploads.' : 'The upload stopped (error ' + st2 + '). Try again.');
+          }, function (e) { if (e.lengthComputable) progress(sent + e.loaded); });
+        })();
+      });
+    }
+
+    function publish() {
       bar.style.width = '100%'; box.classList.add('working');
       setText(path === 'android' ? 'Step 2 of 2 · Checking the APK and publishing…' : 'Step 2 of 2 · Saving and publishing…');
-    };
-    xhr.onload = function () {
-      finish(); box.classList.remove('working');
-      var d = {}; try { d = JSON.parse(xhr.responseText); } catch (e) { }
-      if (xhr.status === 401) { setToken(null); screen('login'); return; }
-      if (xhr.status === 413) { setText('The file is too big for the server or the proxy in front of it (like nginx or Cloudflare).', 'bad'); return; }
-      if (xhr.status >= 400) { setText(typeof d.detail === 'string' ? d.detail : 'Publishing failed (error ' + xhr.status + ').', 'bad'); return; }
-      setText('✓ ' + (d.version ? 'Published version ' + d.version + ' (' + d.version_code + ') for ' + d.apks.join(', ') + '. Phones will see the update.' : 'Published.'), 'ok');
-      form.reset(); loadReleases(); if (done) done();
-    };
-    xhr.onerror = function () { finish(); setText('The upload was cut off. Check your connection and try again.', 'bad'); };
-    xhr.send(data || new FormData(form));
+      var body = new FormData();
+      rest.forEach(function (kv) { body.append(kv[0], kv[1]); });
+      staged.forEach(function (kv) { body.append('staged', kv[1]); });
+      req('POST', 'api/admin/releases/' + path, body, function (st, d) {
+        finish(); box.classList.remove('working');
+        if (st === 401) { setToken(null); screen('login'); return; }
+        if (st === 0) { setText('Lost the connection while publishing. Reload to see if it went through.', 'bad'); return; }
+        if (st >= 400) { setText(typeof d.detail === 'string' ? d.detail : 'Publishing failed (error ' + st + ').', 'bad'); return; }
+        setText('✓ ' + (d.version ? 'Published version ' + d.version + ' (' + d.version_code + ') for ' + d.apks.join(', ') + '. Phones will see the update.' : 'Published.'), 'ok');
+        form.reset(); loadReleases(); if (done) done();
+      });
+    }
+
+    if (files.length) { progress(0); sendFile(0); } else publish();
   }
 
   // Android: drop APKs (and optionally the version.json from package_release.py).
