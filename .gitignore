@@ -11,4 +11,5 @@ build/
 *.keystore
 keystore.properties
 /Haul-debug.apk
-oldPP//app/src/main/res/raw/ytdlp
+oldPP/
+/app/src/main/res/raw/ytdlp
