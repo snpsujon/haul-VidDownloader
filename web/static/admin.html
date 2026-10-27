@@ -111,11 +111,17 @@
       </div>
 
       <div class="rel">
-        <div class="relhead"><b>PC helper (Windows)</b><span class="sub" id="rel-helper"></span></div>
+        <div class="relhead"><b>PC helper</b><span class="sub" id="rel-helper"></span></div>
         <form id="f-helper" class="relform">
           <div class="opts">
-            <label>Version<input name="version" placeholder="1.0.0"></label>
-            <label>haul-helper.exe<input type="file" name="file" accept=".exe,.zip,.msi"></label>
+            <label>Version<input name="version" placeholder="0.4.0"></label>
+          </div>
+          <p class="sub" style="margin:0 0 10px">Pick only the builds you're updating; the others stay as they are. Mac and Linux users install with <code>curl -fsSL &lt;site&gt;/install.sh | sh</code>, which downloads these.</p>
+          <div class="opts">
+            <label>Windows (haul-helper.exe)<input type="file" name="file" accept=".exe,.zip,.msi"></label>
+            <label>Mac (haul-helper-mac)<input type="file" name="mac"></label>
+            <label>Linux x64 (haul-helper-linux-x64)<input type="file" name="linux-x64"></label>
+            <label>Linux ARM64 (haul-helper-linux-arm64)<input type="file" name="linux-arm64"></label>
           </div>
           <label class="block">Notes<textarea name="notes" rows="2" placeholder="Shown on the page"></textarea></label>
           <div class="actions"><button class="btn small" type="submit">Publish helper</button><button class="btn small ghost" type="button" data-unpublish="helper">Remove</button></div>

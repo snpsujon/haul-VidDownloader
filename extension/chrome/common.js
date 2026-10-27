@@ -6,6 +6,9 @@ const HOST_NAME = 'app.haul.helper';
 const SITE_URL = 'https://stackforge-pro.xyz';
 const HELPER_DOWNLOAD_URL = 'https://stackforge-pro.xyz/helper'; // helper download page with setup steps
 const RELEASES_URL = SITE_URL + '/api/releases';
+// macOS and Linux install the helper with this line in Terminal. Windows downloads haul-helper.exe.
+const INSTALL_CMD = `curl -fsSL ${SITE_URL}/install.sh | sh`;
+const IS_WINDOWS = /^win/i.test(navigator.userAgentData?.platform || navigator.platform || '');
 
 const DEFAULTS = {
   qrMode: 'haul',       // 'haul': haul://save?url=… opens Haul directly. 'plain': the page link itself

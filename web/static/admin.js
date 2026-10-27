@@ -276,7 +276,7 @@
       $('rel-android').innerHTML = a ? esc('Version ' + a.version + ' (' + a.version_code + ') · ' + Object.keys(a.apks).join(', ') + ' · ' + day(a.updated)) + ' · <a href="' + esc(a.url) + '">download</a>' : 'Not uploaded yet';
       ['extension', 'helper'].forEach(function (k) {
         var x = p[k];
-        $('rel-' + k).innerHTML = x ? esc([x.version ? 'Version ' + x.version : '', x.size ? bytes(x.size) : '', x.store_url ? 'store link' : '', day(x.updated)].filter(Boolean).join(' · ')) +
+        $('rel-' + k).innerHTML = x ? esc([x.version ? 'Version ' + x.version : '', x.builds ? Object.keys(x.builds).join(', ') : x.size ? bytes(x.size) : '', x.store_url ? 'store link' : '', day(x.updated)].filter(Boolean).join(' · ')) +
           (x.url ? ' · <a href="' + esc(x.url) + '">download</a>' : '') : 'Not uploaded yet';
         var f = $('f-' + k);
         if (x) { if (x.version) f.version.value = x.version; if (f.notes) f.notes.value = x.notes || ''; if (f.store_url) f.store_url.value = x.store_url || ''; }

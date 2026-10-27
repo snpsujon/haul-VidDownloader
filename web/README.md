@@ -69,7 +69,7 @@ the helper runs yt-dlp and FFmpeg locally and saves to the extension's download 
 can switch to the server with the "Download on" toggle. Clips, subtitles, picking the audio
 language and MKV/WebM still go through the server, because the helper doesn't do those yet.
 
-The extension only talks to sites listed in its `externally_connectable` (pyd.snpsujon.me,
+The extension only talks to sites listed in its `externally_connectable` (stackforge-pro.xyz,
 localhost and 127.0.0.1). Add your domain there if you host the site somewhere else. The site
 looks for the extension IDs in `HAUL_EXTENSION_IDS`.
 
@@ -86,6 +86,10 @@ they survive rebuilds when that folder is a volume.
 
 - `GET /get/android`, `/get/extension`, `/get/helper` always give the latest one.
 - `/about`, `/privacy`, `/terms`, `/copyright` and `/contact` are info pages linked in the footer.
+- The PC helper slot takes a Windows .exe plus Mac (`haul-helper-mac`), Linux x64 and Linux ARM64
+  builds, served at `/get/helper/mac`, `/get/helper/linux-x64` and `/get/helper/linux-arm64`.
+  Mac and Linux users install with `curl -fsSL <site>/install.sh | sh` (add `-s uninstall` to remove);
+  `static/install.sh` is served as plain text with LF line endings, pointed at this site.
 - `/helper` is a download page for the PC helper with setup steps, for linking from the extension.
 - `GET /app/version.json` is the Android app's update file (same format as
   `scripts/package_release.py`), published when you upload APKs. The version code can't go down.

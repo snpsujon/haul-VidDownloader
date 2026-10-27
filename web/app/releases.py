@@ -15,11 +15,14 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
 from . import config
 
+STATIC = Path(__file__).resolve().parent.parent / "static"
 ABIS = ("universal", "arm64-v8a", "armeabi-v7a", "x86_64")
+# Mac and Linux builds of the PC helper, fetched by install.sh. The Windows .exe is helper["file"].
+HELPER_BUILDS = ("mac", "linux-x64", "linux-arm64")
 _lock = threading.Lock()
 
 
@@ -109,13 +112,19 @@ def public(base: str = "") -> dict:
         }
     for slot in ("extension", "helper"):
         r = d[slot]
-        if r and (r.get("file") or r.get("store_url")):
+        if r and (r.get("file") or r.get("store_url") or r.get("builds")):
             out[slot] = {
                 "version": r.get("version"), "notes": r.get("notes"), "updated": r.get("updated"),
                 "size": r.get("size"), "sha256": r.get("sha256"),
                 "url": base + f"/get/{slot}" if r.get("file") else None,
                 "store_url": r.get("store_url"),
             }
+            if slot == "helper":
+                builds = {"windows": r} if r.get("file") else {}
+                builds |= r.get("builds") or {}
+                out[slot]["builds"] = {
+                    k: {"url": base + ("/get/helper" if k == "windows" else f"/get/helper/{k}"),
+                        "size": v["size"], "sha256": v["sha256"]} for k, v in builds.items()}
     out["files"] = [{"name": f["file"], "title": f.get("title") or f["file"], "size": f["size"],
                      "sha256": f["sha256"], "updated": f.get("updated"), "url": f"{base}/files/{f['file']}"}
                     for f in d["files"]]
@@ -190,6 +199,22 @@ async def get_latest(slot: str):
     raise HTTPException(404, "Unknown download.")
 
 
+@public_router.get("/get/helper/{build}", tags=["downloads"], summary="The PC helper for macOS or Linux (raw binary)")
+async def get_helper_build(build: str):
+    b = ((load()["helper"] or {}).get("builds") or {}).get(build)
+    if build not in HELPER_BUILDS or not b:
+        raise HTTPException(404, "That helper build hasn't been uploaded yet.")
+    return _send(root() / "helper" / b["file"])
+
+
+@public_router.get("/install.sh", include_in_schema=False)
+async def install_sh(request: Request):
+    """The macOS/Linux helper installer: curl -fsSL <site>/install.sh | sh"""
+    text = (STATIC / "install.sh").read_text(encoding="utf-8").replace("\r\n", "\n")
+    text = text.replace('SITE="${HAUL_SITE:-https://stackforge-pro.xyz}"', f'SITE="${{HAUL_SITE:-{base_url(request)}}}"', 1)
+    return PlainTextResponse(text, headers={"Cache-Control": "no-cache"})
+
+
 @public_router.get("/files/{name}", include_in_schema=False)
 async def other_file(name: str):
     if name not in {f["file"] for f in load()["files"]}:
@@ -248,7 +273,7 @@ def admin_router(require_admin) -> APIRouter:
         return {"ok": True}
 
     async def _upload_single(slot: str, version: str, notes: str, store_url: str | None,
-                             file: UploadFile | None, exts: tuple[str, ...]):
+                             file: UploadFile | None, exts: tuple[str, ...], builds: dict | None = None):
         prev = load()[slot] or {}
         entry = {"version": version or prev.get("version"), "notes": notes, "updated": time.time(),
                  "store_url": (store_url or "").strip() or None}
@@ -264,13 +289,22 @@ def admin_router(require_admin) -> APIRouter:
                 raise HTTPException(400, str(e))
         elif prev.get("file"):
             entry.update({k: prev[k] for k in ("file", "size", "sha256")})
-        if not entry.get("file") and not entry["store_url"]:
+        if builds is not None:
+            # Builds not picked this time are kept from the last upload.
+            entry["builds"] = dict(prev.get("builds") or {})
+            for name, f in builds.items():
+                if _given(f):
+                    try:
+                        entry["builds"][name] = await store(f, root() / slot / f"haul-helper-{name}")
+                    except UploadError as e:
+                        raise HTTPException(400, str(e))
+        if not entry.get("file") and not entry["store_url"] and not entry.get("builds"):
             raise HTTPException(400, "Upload a file" + (" or add a store link." if slot == "extension" else "."))
         with _lock:
             d = load()
             d[slot] = entry
             _save(d)
-        _remove_files(root() / slot, {entry.get("file")})
+        _remove_files(root() / slot, {entry.get("file")} | {b["file"] for b in (entry.get("builds") or {}).values()})
         return {"ok": True}
 
     @r.post("/extension", summary="Publish the browser extension (a .zip, a store link, or both)")
@@ -278,10 +312,17 @@ def admin_router(require_admin) -> APIRouter:
                                store_url: str = Form("", max_length=500), file: UploadFile | None = File(None)):
         return await _upload_single("extension", version, notes, store_url, file, (".zip", ".crx"))
 
-    @r.post("/helper", summary="Publish the Windows PC helper")
+    @r.post("/helper", summary="Publish the PC helper (Windows .exe, plus macOS and Linux builds)")
     async def upload_helper(version: str = Form("", max_length=40), notes: str = Form("", max_length=2000),
-                            file: UploadFile | None = File(None)):
-        return await _upload_single("helper", version, notes, None, file, (".exe", ".zip", ".msi"))
+                            file: UploadFile | None = File(None),
+                            mac: UploadFile | None = File(None),
+                            linux_x64: UploadFile | None = File(None, alias="linux-x64"),
+                            linux_arm64: UploadFile | None = File(None, alias="linux-arm64")):
+        builds = {"mac": mac, "linux-x64": linux_x64, "linux-arm64": linux_arm64}
+        for f in builds.values():
+            if _given(f) and f.filename.lower().endswith((".exe", ".msi", ".zip", ".dmg", ".html")):
+                raise HTTPException(400, f"{f.filename} doesn't look like a Mac or Linux helper. Upload haul-helper-mac or haul-helper-linux-….")
+        return await _upload_single("helper", version, notes, None, file, (".exe", ".zip", ".msi"), builds)
 
     @r.delete("/{slot}", summary="Stop offering the app, extension or helper")
     async def remove_slot(slot: str):

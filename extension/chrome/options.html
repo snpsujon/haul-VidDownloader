@@ -15,6 +15,8 @@
     label.choice input { margin-top: 3px; accent-color: var(--signal); }
     ol { padding-left: 20px; margin: 10px 0; }
     ol li { margin: 6px 0; }
+    .cmd { display: flex; gap: 8px; align-items: center; margin: 8px 0 4px; }
+    .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 6px 8px; user-select: all; }
     code { background: var(--ground); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 12px; }
     .status { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-weight: 600; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
@@ -117,10 +119,17 @@
 
       <div id="setupSteps" hidden>
         <p>To save videos on this computer, Haul needs its small helper app. You only do this once.</p>
-        <ol>
+        <ol id="stepsWin">
           <li><a id="helperLink" href="#" target="_blank" rel="noopener">Download <code>haul-helper.exe</code></a> for Windows.</li>
           <li>Double-click it. It copies itself to your user folder, downloads yt-dlp and FFmpeg (about 150 MB), and connects to Chrome, Edge and Brave. No admin rights needed.</li>
           <li>If Windows shows "Windows protected your PC", click <em>More info</em>, then <em>Run anyway</em>. That happens because the helper isn't code-signed yet.</li>
+          <li>When it says it's done, come back here and click <em>Check again</em>.</li>
+        </ol>
+        <ol id="stepsUnix" hidden>
+          <li>Open Terminal and paste this line, then press Enter:
+            <div class="cmd"><code id="installCmd"></code><button id="copyCmd" class="btn small">Copy</button></div>
+          </li>
+          <li>It puts the helper in your user folder, downloads yt-dlp and FFmpeg (about 100 MB), and connects to Chrome, Edge, Brave and Chromium. No admin password needed.</li>
           <li>When it says it's done, come back here and click <em>Check again</em>.</li>
         </ol>
       </div>

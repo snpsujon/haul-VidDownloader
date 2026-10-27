@@ -23,6 +23,9 @@ More ways in:
 | --- | --- |
 | `chrome/` | The extension (Manifest V3). Works in Chrome, Edge, Brave and other Chromium browsers. `inpage.js` is the button on videos. |
 | `helper/haul-helper.exe` | The Windows helper that runs yt-dlp for desktop downloads. |
+| `helper/haul-helper-mac` | The macOS helper (one file for Intel and Apple silicon). |
+| `helper/haul-helper-linux-x64`, `helper/haul-helper-linux-arm64` | The Linux helpers. |
+| `helper/install.sh` | The one-line installer for macOS and Linux. The website serves it at `/install.sh`. |
 | `helper-source/` | The helper's Go source. |
 
 ## Install the extension
@@ -43,6 +46,16 @@ More ways in:
 Files are saved to `Downloads\Haul` unless you choose another folder in the extension's settings. You can update yt-dlp from the settings page when a site stops working.
 
 To remove the helper, run `haul-helper.exe uninstall` from a terminal, then delete `%LOCALAPPDATA%\Haul\helper`.
+
+### macOS and Linux
+
+Paste this into Terminal:
+
+```
+curl -fsSL https://stackforge-pro.xyz/install.sh | sh
+```
+
+The script picks the right helper for the computer (`mac`, `linux-x64` or `linux-arm64`), downloads it from `https://stackforge-pro.xyz/get/helper/<build>`, and runs `haul-helper install`. The helper copies itself to `~/Library/Application Support/Haul/helper` (macOS) or `~/.config/Haul/helper` (Linux), downloads yt-dlp and FFmpeg, and registers itself with Chrome, Edge, Brave and Chromium. No admin password is needed. macOS doesn't block it, because files fetched with `curl` aren't marked as downloaded from the internet. FFmpeg comes from yt-dlp's builds on Linux and from ffmpeg.martin-riedl.de on macOS. If that download fails, the helper uses an FFmpeg that's already installed, such as Homebrew's. To remove it: `curl -fsSL https://stackforge-pro.xyz/install.sh | sh -s uninstall`. For testing against another site, set `HAUL_SITE`.
 
 ## Phone links
 
@@ -71,7 +84,7 @@ Version 2.0.0 replaces the old "Universal Media Downloader" listing as an update
 1. Upload `store/haul-2.0.0-chrome-web-store.zip`. It's the `chrome` folder with the `key` line removed, because the store rejects packages that contain one. Go to the developer dashboard, open the existing item, then Package, then Upload new package.
 2. Update the listing: name, description, screenshots and the 128 px icon. Keep YouTube out of the text and screenshots, because the store doesn't allow YouTube downloaders. If review rejects the update because of the "Also show it on YouTube" switch, remove it from the store build.
 3. On the Privacy tab, explain the new permissions. `nativeMessaging` talks to the optional desktop helper. `notifications` says when a download finishes. `contextMenus` adds the right-click items. `storage` keeps settings. `scripting` adds the button on videos, and the optional all-sites access is requested only when the user turns that button on.
-4. Upload `helper/haul-helper.exe` on the website's admin page. The extension's "Download the PC helper" buttons open the helper download page `https://stackforge-pro.xyz/helper` (`HELPER_DOWNLOAD_URL` in `chrome/common.js`; the site and API live at `SITE_URL`). The settings page reads `/api/releases` and offers a newer helper when there is one.
+4. Upload the helpers on the website's admin page: `haul-helper.exe` (Windows), `haul-helper-mac`, `haul-helper-linux-x64` and `haul-helper-linux-arm64`. The site serves them at `/get/helper` (Windows) and `/get/helper/mac`, `/get/helper/linux-x64`, `/get/helper/linux-arm64`, and serves `helper/install.sh` at `/install.sh`. The extension's "Download the PC helper" buttons open the helper download page `https://stackforge-pro.xyz/helper` (`HELPER_DOWNLOAD_URL` in `chrome/common.js`; the site and API live at `SITE_URL`). The settings page reads `/api/releases` and offers a newer helper when there is one.
 
 For each later release, raise `version` in `chrome/manifest.json`, then rebuild the store zip. To do that, copy `chrome`, delete the `"key": …` line from the copy's manifest, and zip the copy's contents. The manifest goes at the root of the zip, not inside a folder.
 
@@ -84,4 +97,14 @@ cd helper-source
 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o haul-helper.exe .
 ```
 
-On Linux or macOS, `go build` produces a helper for that system, which is handy for testing. It uses FFmpeg from `PATH`.
+For macOS and Linux:
+
+```
+GOOS=linux  GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o haul-helper-linux-x64 .
+GOOS=linux  GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o haul-helper-linux-arm64 .
+GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o mac-amd64 .
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o mac-arm64 .
+python3 lipo.py haul-helper-mac mac-amd64 mac-arm64
+```
+
+`lipo.py` joins the two macOS builds into one file, like Apple's `lipo -create`. Go signs the Apple silicon build itself (ad hoc), which is all macOS needs to run it.

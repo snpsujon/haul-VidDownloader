@@ -3,6 +3,14 @@ const $ = (id) => document.getElementById(id);
 (async () => {
   const settings = await getSettings();
   $('helperLink').href = HELPER_DOWNLOAD_URL;
+  $('stepsWin').hidden = !IS_WINDOWS;
+  $('stepsUnix').hidden = IS_WINDOWS;
+  $('installCmd').textContent = INSTALL_CMD;
+  $('copyCmd').onclick = async () => {
+    await navigator.clipboard.writeText(INSTALL_CMD);
+    $('copyCmd').textContent = 'Copied';
+    setTimeout(() => ($('copyCmd').textContent = 'Copy'), 1200);
+  };
 
   for (const r of document.querySelectorAll('input[name="qrMode"]')) {
     r.checked = r.value === settings.qrMode;
@@ -138,7 +146,8 @@ async function offerNewHelper(installed) {
     const r = await fetch(RELEASES_URL, { cache: 'no-store' });
     const { helper } = await r.json();
     if (!helper?.version || !newerVersion(helper.version, installed)) return;
-    $('newHelper').href = new URL(helper.url || '/get/helper', SITE_URL).href;
+    // Windows gets the new .exe directly. Elsewhere the helper page shows the install line again.
+    $('newHelper').href = IS_WINDOWS ? new URL(helper.url || '/get/helper', SITE_URL).href : HELPER_DOWNLOAD_URL;
     $('newHelper').textContent = `Get helper ${helper.version}`;
     $('newHelper').hidden = false;
   } catch {
@@ -180,7 +189,9 @@ async function check() {
     offerNewHelper(s.version);
   } else if (s.ok) {
     $('statusText').textContent = 'Helper found, but its tools are missing';
-    $('details').textContent = 'Run haul-helper.exe again to finish downloading yt-dlp and FFmpeg.';
+    $('details').textContent = IS_WINDOWS
+      ? 'Run haul-helper.exe again to finish downloading yt-dlp and FFmpeg.'
+      : 'Run the install line in Terminal again to finish downloading yt-dlp and FFmpeg.';
   } else if (s.error === 'missing') {
     $('statusText').textContent = 'Not set up yet';
     $('details').textContent = '';

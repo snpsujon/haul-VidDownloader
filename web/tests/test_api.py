@@ -352,3 +352,34 @@ def test_seo_pages_sitemap_and_robots(client):
     sm = client.get("/sitemap.xml")
     assert sm.headers["content-type"].startswith("application/xml") and "/tiktok-downloader</loc>" in sm.text
     assert "Sitemap: http://testserver/sitemap.xml" in client.get("/robots.txt").text
+
+
+def test_pages_and_scripts_are_revalidated(client):
+    for path in ("/", "/admin", "/app.js", "/admin.js", "/style.css"):
+        assert client.get(path).headers.get("cache-control") == "no-cache", path
+
+
+def test_helper_builds_and_install_script(client, monkeypatch):
+    monkeypatch.setattr(config, "ADMIN_PASSWORD", "pw")
+    h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
+    assert client.get("/get/helper/mac").status_code == 404
+    r = client.post("/api/admin/releases/helper", headers=h, data={"version": "0.4.0"},
+                    files={"file": ("haul-helper.exe", b"MZwin"), "mac": ("haul-helper-mac", b"\xcf\xfa\xed\xfemac"),
+                           "linux-x64": ("haul-helper-linux-x64", b"\x7fELFx64")})
+    assert r.status_code == 200, r.text
+    # A later upload of one build keeps the others.
+    client.post("/api/admin/releases/helper", headers=h, data={"version": "0.4.1"},
+                files={"linux-arm64": ("haul-helper-linux-arm64", b"\x7fELFarm")})
+    rel = client.get("/api/releases").json()["helper"]
+    assert rel["version"] == "0.4.1" and set(rel["builds"]) == {"windows", "mac", "linux-x64", "linux-arm64"}
+    mac = client.get("/get/helper/mac")
+    assert mac.content == b"\xcf\xfa\xed\xfemac" and mac.headers["content-type"] == "application/octet-stream"
+    assert client.get("/get/helper/linux-arm64").content == b"\x7fELFarm"
+    assert client.get("/get/helper").content == b"MZwin"
+    assert client.get("/get/helper/windows-xp").status_code == 404
+    bad = client.post("/api/admin/releases/helper", headers=h, files={"mac": ("haul-helper.exe", b"MZ")})
+    assert bad.status_code == 400
+    sh = client.get("/install.sh")
+    assert sh.headers["content-type"].startswith("text/plain") and "\r" not in sh.text
+    assert sh.text.startswith("#!/bin/sh") and 'SITE="${HAUL_SITE:-http://testserver}"' in sh.text
+    client.delete("/api/admin/releases/helper", headers=h)

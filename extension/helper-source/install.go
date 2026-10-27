@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -60,13 +61,17 @@ func install() error {
 	if err := download(ytdlpURL, ytdlpPath()); err != nil {
 		return fmt.Errorf("couldn't download yt-dlp: %w", err)
 	}
-	if ffmpegZipURL != "" {
-		if fileExists(ffmpegPath()) {
+	if len(ffmpegArchives) > 0 {
+		if fileExists(filepath.Join(binDir(), exe("ffmpeg"))) && fileExists(filepath.Join(binDir(), exe("ffprobe"))) {
 			step("FFmpeg is already here")
 		} else {
 			step("Downloading FFmpeg (the biggest part, about 140 MB)")
 			if err := installFFmpeg(); err != nil {
-				return fmt.Errorf("couldn't download FFmpeg: %w", err)
+				if sys := systemFFmpeg(); sys != "" {
+					step("Couldn't download FFmpeg, so Haul will use the one at " + sys)
+				} else {
+					return fmt.Errorf("couldn't download FFmpeg: %w", err)
+				}
 			}
 		}
 	}
@@ -88,38 +93,86 @@ func uninstall() error {
 	return nil
 }
 
+// installFFmpeg downloads each archive in ffmpegArchives and keeps ffmpeg and ffprobe from them.
+// Windows gets both in one zip, macOS gets one zip each, Linux gets a .tar.xz.
 func installFFmpeg() error {
-	zipPath := filepath.Join(binDir(), "ffmpeg.zip")
-	defer os.Remove(zipPath)
-	if err := download(ffmpegZipURL, zipPath); err != nil {
-		return err
-	}
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
 	found := 0
-	for _, f := range r.File {
-		name := filepath.Base(f.Name)
-		if name != exe("ffmpeg") && name != exe("ffprobe") {
-			continue
+	for i, url := range ffmpegArchives {
+		archive := filepath.Join(binDir(), fmt.Sprintf("ffmpeg-%d.download", i))
+		err := download(url, archive)
+		if err == nil {
+			if strings.HasSuffix(url, ".tar.xz") {
+				found += extractTar(archive)
+			} else {
+				var n int
+				n, err = extractZip(archive)
+				found += n
+			}
 		}
-		src, err := f.Open()
+		os.Remove(archive)
 		if err != nil {
 			return err
 		}
-		err = writeAtomic(filepath.Join(binDir(), name), src)
-		src.Close()
-		if err != nil {
-			return err
-		}
-		found++
 	}
 	if found < 2 {
 		return fmt.Errorf("ffmpeg wasn't in the download")
 	}
 	return nil
+}
+
+// isFFmpeg tells whether an archive entry is one of the two programs we keep.
+func isFFmpeg(name string) bool {
+	return name == exe("ffmpeg") || name == exe("ffprobe")
+}
+
+func extractZip(path string) (int, error) {
+	r, err := zip.OpenReader(path)
+	if err != nil {
+		return 0, err
+	}
+	defer r.Close()
+	found := 0
+	for _, f := range r.File {
+		name := filepath.Base(f.Name)
+		if !isFFmpeg(name) || f.FileInfo().IsDir() {
+			continue
+		}
+		src, err := f.Open()
+		if err != nil {
+			return found, err
+		}
+		err = writeAtomic(filepath.Join(binDir(), name), src)
+		src.Close()
+		if err != nil {
+			return found, err
+		}
+		found++
+	}
+	return found, nil
+}
+
+// extractTar unpacks a .tar.xz with the system tar, which handles xz on every Linux we support.
+func extractTar(path string) int {
+	tmp, err := os.MkdirTemp(binDir(), "ffmpeg-")
+	if err != nil {
+		return 0
+	}
+	defer os.RemoveAll(tmp)
+	if out, err := exec.Command("tar", "-xJf", path, "-C", tmp).CombinedOutput(); err != nil {
+		fmt.Println("   tar:", strings.TrimSpace(string(out)))
+		return 0
+	}
+	found := 0
+	filepath.WalkDir(tmp, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !isFFmpeg(d.Name()) {
+			return nil
+		}
+		if copyFile(p, filepath.Join(binDir(), d.Name())) == nil {
+			found++
+		}
+		return nil
+	})
+	return found
 }
 
 func download(url, dest string) error {

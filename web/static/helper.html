@@ -11,11 +11,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="style.css">
 <style>
-.hdl{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0 6px}
-.hmeta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low)}
+.hmeta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low);margin-top:8px}
 ol.hsteps{margin:8px 0 0;padding-left:22px;font-size:15px;line-height:26px;color:var(--mid)}
 ol.hsteps b{color:var(--hi)}
-.hnote{font-size:14px;color:var(--mid);line-height:22px;margin:0}
+.hnote{font-size:14px;color:var(--mid);line-height:22px;margin:12px 0 0}
+.ostabs{margin:4px 0 16px}
+.cmd{display:flex;align-items:center;gap:8px;background:var(--s2);border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 14px}
+.cmd code{flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--hi);white-space:nowrap;overflow-x:auto;padding:8px 0}
+.cmd .btn{flex:none}
+.small-label{font-size:13px;color:var(--low);margin:18px 0 6px}
 </style>
 </head>
 <body>
@@ -26,29 +30,54 @@ ol.hsteps b{color:var(--hi)}
   </div>
 
   <h1>Haul PC helper</h1>
-  <p class="lead">The helper lets the Haul extension save videos and audio straight to your computer, in full quality, with clips, playlists, subtitles and cover art.</p>
+  <p class="lead">The helper lets the Haul extension save videos and audio straight to your computer, in full quality, with clips, playlists, subtitles and cover art. It works on Windows, Mac and Linux.</p>
 
-  <div id="have" class="hidden">
-    <div class="hdl">
+  <div class="seg ostabs" role="tablist" aria-label="Your computer">
+    <button type="button" role="tab" data-os="windows">Windows</button>
+    <button type="button" role="tab" data-os="mac">Mac</button>
+    <button type="button" role="tab" data-os="linux">Linux</button>
+  </div>
+
+  <!-- Windows -->
+  <div class="ospane hidden" data-pane="windows">
+    <div id="win-have" class="hidden">
       <a class="btn" id="dl" href="get/helper" download>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
         <span>Download for Windows</span>
       </a>
+      <div class="hmeta" id="win-meta"></div>
     </div>
-    <div class="hmeta" id="meta"></div>
-    <p class="hnote" id="notes" style="margin-top:10px"></p>
+    <p class="hnote hidden" id="win-none">The Windows helper isn't available to download yet. Check back soon.</p>
+    <div class="card">
+      <div class="label" style="margin-bottom:4px">How to set it up</div>
+      <ol class="hsteps">
+        <li>Install the <b>Haul extension</b> in Chrome, Edge or Brave first<span class="extlink"></span>.</li>
+        <li>Download <b>haul-helper.exe</b> above and run it.</li>
+        <li>If Windows shows "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</li>
+        <li>Restart your browser, then open the Haul extension. It should say the helper is ready.</li>
+      </ol>
+    </div>
   </div>
-  <div id="none" class="hidden"><p class="hnote">The helper isn't available to download yet. Check back soon.</p></div>
 
-  <div class="card">
-    <div class="label" style="margin-bottom:4px">How to set it up</div>
-    <ol class="hsteps">
-      <li>Install the <b>Haul extension</b> in Chrome, Edge or Brave first<span id="extlink"></span>.</li>
-      <li>Download <b>haul-helper.exe</b> above and run it.</li>
-      <li>If Windows shows "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</li>
-      <li>Restart your browser, then open the Haul extension. It should say the helper is ready.</li>
-    </ol>
+  <!-- Mac and Linux -->
+  <div class="ospane hidden" data-pane="unix">
+    <div class="cmd"><code class="installcmd"></code><button class="btn small" type="button" data-copy="install">Copy</button></div>
+    <p class="hnote">Paste into Terminal and press Enter. It installs in your user folder, downloads yt-dlp and FFmpeg (about 100 MB) and connects Chrome, Edge, Brave and Chromium. No admin password needed.</p>
+    <div class="hmeta" id="unix-meta"></div>
+    <p class="hnote hidden" id="unix-none">The helper for this system isn't available to download yet. Check back soon.</p>
+    <div class="card">
+      <div class="label" style="margin-bottom:4px">How to set it up</div>
+      <ol class="hsteps">
+        <li>Install the <b>Haul extension</b> in Chrome, Edge, Brave or Chromium first<span class="extlink"></span>.</li>
+        <li>Open <b>Terminal</b><span class="mac-only"> (press Command + Space, type Terminal, press Enter)</span>.</li>
+        <li>Paste the line above and press <b>Enter</b>. Wait until it says it's done.</li>
+        <li>Restart your browser, then open the Haul extension. It should say the helper is ready.</li>
+      </ol>
+      <div class="small-label">To remove it later, run:</div>
+      <div class="cmd"><code class="uninstallcmd"></code><button class="btn small ghost" type="button" data-copy="uninstall">Copy</button></div>
+    </div>
   </div>
+  <p class="hnote" id="notes"></p>
 
   <footer>
     <nav class="flinks"><a href="about">About</a><a href="helper">PC helper</a><a href="privacy">Privacy</a><a href="terms">Terms</a><a href="copyright">Copyright</a><a href="contact">Contact</a></nav>
@@ -58,19 +87,70 @@ ol.hsteps b{color:var(--hi)}
 <script>
 (function () {
   function $(id) { return document.getElementById(id); }
+  function all(sel) { return [].slice.call(document.querySelectorAll(sel)); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function bytes(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  function show(el, on) { el.classList.toggle('hidden', !on); }
+
+  var site = location.origin;
+  var install = 'curl -fsSL ' + site + '/install.sh | sh';
+  all('.installcmd').forEach(function (c) { c.textContent = install; });
+  all('.uninstallcmd').forEach(function (c) { c.textContent = install + ' -s uninstall'; });
+
+  var rel = null, os = 'windows';
+  var ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
+  if (/mac/i.test(ua)) os = 'mac'; else if (/linux|x11|cros/i.test(ua) && !/android/i.test(navigator.userAgent)) os = 'linux';
+
+  function meta(h, keys) {
+    if (!h || !h.builds) return '';
+    var have = keys.filter(function (k) { return h.builds[k]; });
+    if (!have.length) return '';
+    var size = h.builds[have[0]].size;
+    return [h.version ? 'Version ' + h.version : '', keys.length > 1 ? 'x64 and ARM64' : '', size ? bytes(size) : '',
+      h.updated ? 'Updated ' + new Date(h.updated * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+  }
+
+  function pick(name) {
+    os = name;
+    all('[data-os]').forEach(function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-os') === name)); b.setAttribute('aria-selected', String(b.getAttribute('data-os') === name)); });
+    show(document.querySelector('[data-pane=windows]'), name === 'windows');
+    show(document.querySelector('[data-pane=unix]'), name !== 'windows');
+    all('.mac-only').forEach(function (e) { show(e, name === 'mac'); });
+    var h = rel && rel.helper;
+    if (name === 'windows') {
+      var w = h && h.builds && h.builds.windows;
+      show($('win-have'), !!w); show($('win-none'), !!rel && !w);
+      if (w) $('win-meta').textContent = [h.version ? 'Version ' + h.version : '', 'Windows', bytes(w.size), h.updated ? 'Updated ' + new Date(h.updated * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+    } else {
+      var keys = name === 'mac' ? ['mac'] : ['linux-x64', 'linux-arm64'];
+      var m = meta(h, keys);
+      $('unix-meta').textContent = m;
+      show($('unix-none'), !!rel && !m);
+    }
+  }
+
+  document.querySelector('.ostabs').addEventListener('click', function (e) {
+    var n = e.target.getAttribute('data-os'); if (n) pick(n);
+  });
+  document.addEventListener('click', function (e) {
+    var which = e.target.getAttribute('data-copy'); if (!which) return;
+    var text = which === 'install' ? install : install + ' -s uninstall', b = e.target;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
+      b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500);
+    }).catch(function () {
+      var r = document.createRange(); r.selectNodeContents(b.previousElementSibling);
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    });
+  });
+
+  pick(os);
   fetch('api/releases').then(function (r) { return r.json(); }).then(function (r) {
-    var h = r.helper;
-    if (h && h.url) {
-      $('meta').textContent = [h.version ? 'Version ' + h.version : '', 'Windows', h.size ? bytes(h.size) : '',
-        h.updated ? 'Updated ' + new Date(h.updated * 1000).toLocaleDateString() : ''].filter(Boolean).join(' · ');
-      $('notes').textContent = h.notes || '';
-      $('have').classList.remove('hidden');
-    } else $('none').classList.remove('hidden');
+    rel = r;
+    if (r.helper && r.helper.notes) $('notes').textContent = r.helper.notes;
     var x = r.extension, link = x && (x.store_url || x.url);
-    if (link) $('extlink').innerHTML = ' (<a href="' + esc(link) + '" target="_blank" rel="noopener">get it here</a>)';
-  }).catch(function () { $('none').classList.remove('hidden'); });
+    if (link) all('.extlink').forEach(function (e) { e.innerHTML = ' (<a href="' + esc(link) + '" target="_blank" rel="noopener">get it here</a>)'; });
+    pick(os);
+  }).catch(function () { rel = {}; pick(os); });
 })();
 </script>
 </body>

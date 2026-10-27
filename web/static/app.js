@@ -738,9 +738,10 @@
         (x.url && !x.store_url ? '<div class="alt">Unzip it, open chrome://extensions, turn on Developer mode and choose "Load unpacked".</div>' : '') + '</div>');
       if (x.store_url) STORE_URL = x.store_url;
     }
-    if (h && h.url) {
-      helperUrl = h.url;
-      cards.push('<div class="ghcard"><h3>PC helper</h3><p class="sub">' + [ver(h.version), 'Windows'].filter(Boolean).join(' · ') + size(h.size) + '</p>' +
+    if (h && (h.url || h.builds)) {
+      helperUrl = 'helper';
+      var b = h.builds || {}, systems = [b.windows && 'Windows', b.mac && 'Mac', (b['linux-x64'] || b['linux-arm64']) && 'Linux'].filter(Boolean);
+      cards.push('<div class="ghcard"><h3>PC helper</h3><p class="sub">' + [ver(h.version), systems.join(', ') || 'Windows'].filter(Boolean).join(' · ') + '</p>' +
         (notes(h.notes) || '<p class="sub">Lets the extension download on this PC with full quality. Install it after the extension.</p>') +
         '<a class="btn small" href="helper">Download helper</a></div>');
     }

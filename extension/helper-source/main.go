@@ -1,7 +1,9 @@
 // haul-helper lets the Haul browser extension save video and audio on this computer.
 //
-// Double-click it to install: it copies itself to %LOCALAPPDATA%\Haul\helper, downloads yt-dlp and
-// FFmpeg, and registers itself as a native messaging host for Chrome, Edge, Brave and Chromium.
+// Double-click it to install (on macOS and Linux, install.sh runs it): it copies itself to
+// %LOCALAPPDATA%\Haul\helper (~/Library/Application Support/Haul/helper on macOS, ~/.config/Haul/helper
+// on Linux), downloads yt-dlp and FFmpeg, and registers itself as a native messaging host for Chrome,
+// Edge, Brave and Chromium.
 // The browser then starts it with the extension's origin as the first argument and talks to it
 // over stdin/stdout.
 package main
@@ -14,7 +16,7 @@ import (
 )
 
 const (
-	version  = "0.3.0"
+	version  = "0.4.0"
 	hostName = "app.haul.helper"
 )
 
@@ -24,7 +26,7 @@ var extensionIDs = []string{
 	"pjolfkooklpnndljgomfbnnhigaoecoe", // unpacked copy loaded from the chrome folder (fixed by the manifest key)
 }
 
-// Paths under %LOCALAPPDATA%\Haul\helper.
+// Paths under %LOCALAPPDATA%\Haul\helper, or the user config folder outside Windows.
 func baseDir() string {
 	dir := os.Getenv("LOCALAPPDATA")
 	if dir == "" {
@@ -35,15 +37,18 @@ func baseDir() string {
 
 func binDir() string    { return filepath.Join(baseDir(), "bin") }
 func ytdlpPath() string { return filepath.Join(binDir(), exe("yt-dlp")) }
-func ffmpegPath() string {
-	if ffmpegOverride != "" {
-		return ffmpegOverride
-	}
-	return filepath.Join(binDir(), exe("ffmpeg"))
-}
 
-// Set on platforms that use the system FFmpeg.
-var ffmpegOverride string
+// ffmpegPath is the FFmpeg the helper downloaded, or one already on the system if that download failed.
+func ffmpegPath() string {
+	own := filepath.Join(binDir(), exe("ffmpeg"))
+	if fileExists(own) {
+		return own
+	}
+	if p := systemFFmpeg(); p != "" {
+		return p
+	}
+	return own
+}
 
 func defaultFolder() string {
 	home, _ := os.UserHomeDir()
@@ -80,9 +85,17 @@ func main() {
 		fmt.Println("Something went wrong:", err)
 	}
 	pause()
+	if err != nil {
+		os.Exit(1)
+	}
 }
 
+// pause keeps a double-clicked window open. It does nothing when run from a script or a pipe,
+// such as the macOS and Linux one-line installer.
 func pause() {
+	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 || os.Getenv("HAUL_NO_PAUSE") != "" {
+		return
+	}
 	fmt.Println()
 	fmt.Print("Press Enter to close this window.")
 	fmt.Scanln()

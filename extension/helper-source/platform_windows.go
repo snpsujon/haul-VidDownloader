@@ -5,10 +5,9 @@ import (
 	"syscall"
 )
 
-const (
-	ytdlpURL     = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
-	ffmpegZipURL = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-)
+const ytdlpURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+
+var ffmpegArchives = []string{"https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"}
 
 // Per-user registry keys each Chromium browser reads native messaging hosts from.
 var hostKeys = []string{
@@ -65,3 +64,6 @@ func openPath(p string) error {
 func openFolder(dir string) error {
 	return exec.Command("explorer", dir).Start()
 }
+
+// The Windows helper always uses the FFmpeg it downloaded.
+func systemFFmpeg() string { return "" }
