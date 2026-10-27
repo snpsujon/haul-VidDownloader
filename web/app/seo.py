@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -127,10 +128,11 @@ def _help(slug: str | None, page: dict | None) -> str:
     else:
         steps = ("<li>Copy the link to a video or song.</li><li>Paste it in the box above and press <b>Get</b>.</li>"
                  "<li>Pick the quality, audio language, subtitles or a clip, then press <b>Download</b>.</li>")
-        intro = "Haul saves video and audio from YouTube and more than 1,000 other sites. It's free, works in any browser and needs no account."
+        intro = "Haul saves video and audio from YouTube and <a href=\"sites\">more than 1,000 other sites</a>. It's free, works in any browser and needs no account."
         head = "How it works"
     faq = page["faq"] if page else HOME_FAQ
-    faq_html = "".join(f"<h3>{_e(q)}</h3><p>{_e(a)}</p>" for q, a in faq)
+    faq_html = "".join(f"<h3>{_e(q)}</h3><p>{_e(a)}</p>" for q, a in faq).replace(
+        "more than 1,000 others", '<a href="sites">more than 1,000 others</a>')
     return f'''<section class="seo doc">
     <h2>{head}</h2>
     <p>{intro}</p>
@@ -196,6 +198,72 @@ async def home_file(request: Request):
     return render(None, request)
 
 
+# Supported sites ---------------------------------------------------------------------------
+
+_SUFFIX = re.compile(r"(?<=[a-z0-9])(Playlists?|Channels?|Users?|Live|Series|Seasons?|Shows?|Collections?|Clips?|"
+                     r"Episodes?|Embeds?|Albums?|Titles?|Search|Tabs?|Feeds?|Lists?|Programs?|Categor(?:y|ies)|"
+                     r"Tracks?|Artists?|Movies?|Videos?|Podcasts?|Audio|Radio|Stories|Story|Posts?|Pages?|IE)$")
+
+
+@lru_cache(maxsize=1)
+def supported_sites(version: str) -> list[dict]:
+    """Sites the installed yt-dlp can download from, one row per site, A to Z."""
+    from yt_dlp.extractor import gen_extractor_classes
+    sites: dict[str, dict] = {}
+    for ie in gen_extractor_classes():
+        if ie.IE_DESC is False or ie.IE_NAME in ("generic",) or not ie.working():
+            continue
+        name = ie.IE_NAME.split(":")[0]
+        for _ in range(3):
+            shorter = _SUFFIX.sub("", name)
+            if shorter == name or len(shorter) < 2:
+                break
+            name = shorter
+        key = name.lower().replace(" ", "")
+        row = sites.setdefault(key, {"name": name, "login": False})
+        if getattr(ie, "_NETRC_MACHINE", None):
+            row["login"] = True
+    return sorted(sites.values(), key=lambda r: r["name"].lower())
+
+
+def _info_page(title: str, desc: str, body: str, base: str, path: str) -> str:
+    """An info page in the same frame as /privacy and the others."""
+    t = (STATIC / "privacy.html").read_text(encoding="utf-8")
+    head, rest = t.split('<article class="doc">', 1)
+    tail = rest.split("</article>", 1)[1]
+    head = re.sub(r"<title>.*?</title>", f"<title>{_e(title)} · Haul</title>", head, count=1)
+    head = re.sub(r'<meta name="description" content="[^"]*">',
+                  f'<meta name="description" content="{_e(desc)}">\n<link rel="canonical" href="{_e(base)}/{path}">', head, count=1)
+    return head + '<article class="doc">\n' + body + "\n  </article>" + tail
+
+
+@router.get("/sites")
+async def sites_page(request: Request):
+    import yt_dlp
+    rows = supported_sites(yt_dlp.version.__version__)
+    items = "".join(f'<li data-n="{_e(r["name"].lower())}">{_e(r["name"])}'
+                    + ('<span class="login" title="Some videos here need an account">login</span>' if r["login"] else "")
+                    + "</li>" for r in rows)
+    body = f'''  <h1>Supported sites</h1>
+  <p class="updated">{len(rows):,} sites · from yt-dlp {_e(yt_dlp.version.__version__)}</p>
+  <p>Haul can save video and audio from all of these. Sites marked <span class="login">login</span> have some videos that need an account, which Haul can't open. Private and paid videos can't be downloaded anywhere. Not listed? Try the link anyway, because many sites with ordinary video players work too.</p>
+  <input id="sitesearch" class="sitesearch" type="search" placeholder="Search {len(rows):,} sites" aria-label="Search sites" autocomplete="off">
+  <p class="sub hidden" id="nosite">No site by that name. Try pasting the link on the <a href="./">home page</a> anyway.</p>
+  <ul class="sitelist" id="sitelist">{items}</ul>
+  <script>
+  (function () {{
+    var q = document.getElementById('sitesearch'), li = document.getElementById('sitelist').children;
+    q.addEventListener('input', function () {{
+      var v = q.value.trim().toLowerCase().replace(/\\s+/g, ''), shown = 0;
+      for (var i = 0; i < li.length; i++) {{ var on = !v || li[i].getAttribute('data-n').replace(/\\s+/g, '').indexOf(v) >= 0; li[i].style.display = on ? '' : 'none'; if (on) shown++; }}
+      document.getElementById('nosite').classList.toggle('hidden', shown > 0);
+    }});
+  }})();
+  </script>'''
+    return HTMLResponse(_info_page("Supported sites", f"All {len(rows):,} sites Haul can download video and audio from.",
+                                   body, base_url(request), "sites"))
+
+
 @router.get("/robots.txt")
 async def robots(request: Request):
     return PlainTextResponse(f"User-agent: *\nDisallow: /api/\nDisallow: /admin\nDisallow: /get/\nDisallow: /files/\n"
@@ -205,7 +273,7 @@ async def robots(request: Request):
 @router.get("/sitemap.xml")
 async def sitemap(request: Request):
     base = base_url(request)
-    paths = ["", *PAGES, "helper", "about", "privacy", "terms", "copyright", "contact"]
+    paths = ["", *PAGES, "sites", "helper", "about", "privacy", "terms", "copyright", "contact"]
     urls = "".join(f"<url><loc>{_e(base)}/{p}</loc></url>" for p in paths)
     return Response(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
                     media_type="application/xml")

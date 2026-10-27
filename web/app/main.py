@@ -52,6 +52,16 @@ app = FastAPI(
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
 )
+@app.middleware("http")
+async def revalidate_pages(request: Request, call_next):
+    """Browsers check for a newer page, script or style each time, so updates show at once."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/") and request.url.path.rsplit(".", 1)[-1] in ("html", "js", "css", "webmanifest", "/") \
+            or response.headers.get("content-type", "").startswith("text/html"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     # The Haul extension's pages are always allowed, even when the list is narrowed.
