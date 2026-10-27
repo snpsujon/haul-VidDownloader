@@ -70,6 +70,7 @@ import app.haul.ui.components.sans
 import app.haul.ui.theme.HIcon
 import app.haul.ui.theme.Haul
 import app.haul.ui.theme.HaulIcon
+import app.haul.engine.Errors
 import app.haul.util.Links
 import app.haul.util.Pretty
 
@@ -352,7 +353,7 @@ fun tapeState(item: DownloadEntity): TapeState = when (item.status) {
 }
 
 /** "62% · 255/412 MB · 4.2 MB/S · 0:38" */
-fun statusLine(item: DownloadEntity, withBytes: Boolean = false, withLeft: Boolean = true): String {
+fun statusLine(item: DownloadEntity, withBytes: Boolean = false, withLeft: Boolean = true, now: Long = System.currentTimeMillis()): String {
     val pct = "${(item.progress * 100).toInt()}%"
     return when (item.status) {
         Status.PROCESSING -> if (item.mediaType == MediaType.AUDIO) "CONVERTING AUDIO…" else "MERGING AUDIO + VIDEO…"
@@ -360,6 +361,10 @@ fun statusLine(item: DownloadEntity, withBytes: Boolean = false, withLeft: Boole
             .filter { it.isNotEmpty() }.joinToString(" · ")
         Status.QUEUED -> "${item.formatLabel} · STARTS WHEN A SLOT FREES"
         Status.WAITING_NETWORK -> "${item.formatLabel} · WAITING FOR A CONNECTION"
+        Status.RETRYING -> {
+            val left = ((item.retryAt - now) / 1000).coerceAtLeast(0)
+            "RETRY ${item.retryCount} OF ${Errors.MAX_AUTO_RETRIES} " + if (left > 0) "IN ${Pretty.eta(left)}" else "WHEN ONLINE"
+        }
         Status.FAILED -> "FAILED AT ${(item.failedAtProgress * 100).toInt()}%"
         Status.DONE -> "SAVED · ${item.formatLabel} · ${Pretty.bytes(item.fileSize)}"
         Status.DOWNLOADING -> {

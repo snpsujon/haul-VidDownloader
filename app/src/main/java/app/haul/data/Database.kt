@@ -1,6 +1,8 @@
 package app.haul.data
 
 import android.content.Context
+import androidx.room.AutoMigration
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -25,6 +27,8 @@ enum class Status {
     /** FFmpeg step: merging, converting, embedding. */
     PROCESSING,
     PAUSED,
+    /** Stopped by a temporary error; goes back to the queue at retryAt. */
+    RETRYING,
     FAILED,
     DONE,
 }
@@ -71,6 +75,9 @@ data class DownloadEntity(
     val errorKind: ErrorKind? = null,
     val errorLog: String? = null,
     val failedAtProgress: Float = 0f,
+    /** Automatic retries used so far for the current failure streak. */
+    @ColumnInfo(defaultValue = "0") val retryCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val retryAt: Long = 0,
 
     // result
     val fileUri: String? = null,
@@ -85,7 +92,7 @@ data class DownloadEntity(
 ) {
     val isActive: Boolean
         get() = status == Status.DOWNLOADING || status == Status.PROCESSING || status == Status.PAUSED
-    val isWaiting: Boolean get() = status == Status.QUEUED || status == Status.WAITING_NETWORK
+    val isWaiting: Boolean get() = status == Status.QUEUED || status == Status.WAITING_NETWORK || status == Status.RETRYING
 }
 
 class Converters {
@@ -119,6 +126,12 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE status IN ('QUEUED','WAITING_NETWORK','DOWNLOADING','PROCESSING')")
     suspend fun pending(): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE status = 'RETRYING'")
+    suspend fun retrying(): List<DownloadEntity>
+
+    @Query("UPDATE downloads SET status = 'QUEUED' WHERE id = :id AND status = 'RETRYING'")
+    suspend fun releaseRetry(id: Long)
 
     @Query("SELECT id FROM downloads WHERE status = 'PAUSED'")
     suspend fun pausedIds(): List<Long>
@@ -161,7 +174,12 @@ interface DownloadDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [DownloadEntity::class], version = 1, exportSchema = true)
+@Database(
+    entities = [DownloadEntity::class],
+    version = 2,
+    exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
+)
 @TypeConverters(Converters::class)
 abstract class HaulDatabase : RoomDatabase() {
     abstract fun downloads(): DownloadDao

@@ -59,4 +59,21 @@ class ProgressTest {
             Errors.technical("[x] a\nERROR: one\n[y] b\nERROR: two\n"),
         )
     }
+    @Test fun transientErrorsRetry() {
+        assertTrue(Errors.isTransient("ERROR: Read timed out."))
+        assertTrue(Errors.isTransient("ERROR: unable to download video data: HTTP Error 503: Service Unavailable"))
+        assertTrue(Errors.isTransient("ERROR: HTTP Error 429: Too Many Requests"))
+        assertFalse(Errors.isTransient("ERROR: [youtube] abc: Private video. Sign in if you've been granted access"))
+        assertFalse(Errors.isTransient("ERROR: [youtube] abc: Video unavailable. This video has been removed by the uploader"))
+        assertFalse(Errors.isTransient("ERROR: The uploader has not made this video available in your country"))
+        assertFalse(Errors.isTransient("ERROR: HTTP Error 404: Not Found"))
+        assertFalse(Errors.isTransient("OSError: [Errno 28] No space left on device"))
+    }
+
+    @Test fun retryBackoff() {
+        assertEquals(30_000L, Errors.retryDelayMs(0))
+        assertEquals(120_000L, Errors.retryDelayMs(1))
+        assertEquals(600_000L, Errors.retryDelayMs(2))
+        assertEquals(600_000L, Errors.retryDelayMs(7))
+    }
 }

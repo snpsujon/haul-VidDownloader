@@ -125,6 +125,29 @@ object Errors {
         }
     }
 
+    const val MAX_AUTO_RETRIES = 3
+    private val RETRY_DELAYS_MS = longArrayOf(30_000, 2 * 60_000, 10 * 60_000)
+    private val PERMANENT = listOf(
+        "video unavailable", "has been removed", "no longer available", "available in your country",
+        "geo restrict", "geo-restrict", "copyright",
+    )
+    private val RETRYABLE_HTTP = Regex("http error (429|5\\d\\d)")
+
+    /** Errors worth retrying on their own: dropped connections, timeouts, rate limits and server errors. */
+    fun isTransient(log: String): Boolean {
+        val l = log.lowercase()
+        if (PERMANENT.any { it in l }) return false
+        return when (classify(log)) {
+            ErrorKind.NETWORK -> true
+            ErrorKind.PRIVATE, ErrorKind.UNSUPPORTED, ErrorKind.STORAGE -> false
+            else -> RETRYABLE_HTTP.containsMatchIn(l) || "too many requests" in l ||
+                "incompleteread" in l || "incomplete read" in l
+        }
+    }
+
+    /** Wait before automatic retry number [attempt] (0-based): 30 s, 2 min, 10 min. */
+    fun retryDelayMs(attempt: Int): Long = RETRY_DELAYS_MS[attempt.coerceIn(0, RETRY_DELAYS_MS.lastIndex)]
+
     fun card(kind: ErrorKind, failedAt: Int): Card {
         val resume = if (failedAt > 0) " It resumes from $failedAt%." else ""
         return when (kind) {

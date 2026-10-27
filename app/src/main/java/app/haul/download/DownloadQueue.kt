@@ -54,6 +54,9 @@ class DownloadQueue(
     fun start() {
         scope.launch {
             dao.requeueInterrupted()
+            // Waiting retries survive a restart: re-arm them, due ones at once.
+            val now = System.currentTimeMillis()
+            dao.retrying().forEach { RetryWorker.schedule(context, it.id, (it.retryAt - now).coerceAtLeast(0)) }
             pump()
         }
         scope.launch {
@@ -103,6 +106,7 @@ class DownloadQueue(
     }
 
     fun cancel(id: Long) = scope.launch {
+        RetryWorker.cancel(context, id)
         stop(id, null)
         dao.delete(id)
         workDir(id).deleteRecursively()
@@ -111,12 +115,23 @@ class DownloadQueue(
 
     fun retry(id: Long) = scope.launch {
         val e = dao.get(id) ?: return@launch
-        dao.update(e.copy(status = Status.QUEUED, errorKind = null, errorLog = null))
+        RetryWorker.cancel(context, id)
+        dao.update(e.copy(status = Status.QUEUED, errorKind = null, errorLog = null, retryCount = 0, retryAt = 0))
+        pump()
+    }
+
+    /** Called by [RetryWorker] when a row's wait is over and there is a connection. */
+    suspend fun retryDue(id: Long) {
+        dao.releaseRetry(id)
         pump()
     }
 
     fun pauseAll() = scope.launch {
         dao.pending().forEach { if (it.status != Status.PROCESSING) stop(it.id, Status.PAUSED) }
+        dao.retrying().forEach {
+            RetryWorker.cancel(context, it.id)
+            dao.setStatus(it.id, Status.PAUSED)
+        }
     }
 
     fun resumeAll() = scope.launch {
@@ -208,6 +223,8 @@ class DownloadQueue(
                 finishedAt = System.currentTimeMillis(),
                 speedBps = 0,
                 etaSec = -1,
+                retryCount = 0,
+                retryAt = 0,
             )
             dao.update(done)
             workDir(item.id).deleteRecursively()
@@ -235,12 +252,21 @@ class DownloadQueue(
             speedBps = 0,
             etaSec = -1,
         )
-        dao.update(failed)
-        // A network drop goes back to waiting instead of failing.
-        if (kind == ErrorKind.NETWORK && !network.read().online) {
-            dao.setStatus(item.id, Status.WAITING_NETWORK)
-        } else {
-            Notifications.failed(context, failed)
+        when {
+            // A network drop goes back to waiting instead of failing.
+            kind == ErrorKind.NETWORK && !network.read().online -> dao.update(failed.copy(status = Status.WAITING_NETWORK))
+            // Temporary errors try again on their own, waiting longer each time. Partial files are kept.
+            Errors.isTransient(log) && current.retryCount < Errors.MAX_AUTO_RETRIES -> {
+                val delay = Errors.retryDelayMs(current.retryCount)
+                dao.update(
+                    failed.copy(status = Status.RETRYING, retryCount = current.retryCount + 1, retryAt = System.currentTimeMillis() + delay),
+                )
+                RetryWorker.schedule(context, item.id, delay)
+            }
+            else -> {
+                dao.update(failed)
+                Notifications.failed(context, failed)
+            }
         }
     }
 

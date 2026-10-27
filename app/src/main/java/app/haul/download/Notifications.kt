@@ -64,6 +64,7 @@ object Notifications {
     fun service(context: Context, queue: List<DownloadEntity>): android.app.Notification {
         val active = queue.filter { it.status == Status.DOWNLOADING || it.status == Status.PROCESSING }
         val waitingNet = queue.count { it.status == Status.WAITING_NETWORK }
+        val retrying = queue.count { it.status == Status.RETRYING }
         val total = queue.count { it.status != Status.FAILED && it.status != Status.PAUSED }
         val b = NotificationCompat.Builder(context, CHANNEL_PROGRESS)
             .setSmallIcon(R.drawable.ic_notification)
@@ -75,8 +76,13 @@ object Notifications {
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
         val first = active.firstOrNull()
         if (first == null) {
-            b.setContentTitle(if (waitingNet > 0) "Waiting for a connection" else "Getting ready")
-            if (waitingNet > 0) b.setContentText("$waitingNet queued. They start on their own when you're back online.")
+            when {
+                waitingNet > 0 -> b.setContentTitle("Waiting for a connection")
+                    .setContentText("$waitingNet queued. They start on their own when you're back online.")
+                retrying > 0 -> b.setContentTitle("Retrying soon")
+                    .setContentText(if (retrying == 1) "A download hit a temporary error and will try again." else "$retrying downloads hit a temporary error and will try again.")
+                else -> b.setContentTitle("Getting ready")
+            }
             return b.build()
         }
         val index = queue.indexOfFirst { it.id == first.id }.coerceAtLeast(0) + 1

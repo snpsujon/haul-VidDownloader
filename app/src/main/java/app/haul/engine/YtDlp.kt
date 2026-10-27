@@ -117,6 +117,7 @@ class YtDlp(private val context: Context) {
         req.addOption("--socket-timeout", 30)
         req.addOption("--retries", 5)
         req.addOption("--fragment-retries", 10)
+        req.addCommands(listOf("--retry-sleep", "exp=1:20", "--retry-sleep", "fragment:exp=1:20"))
         req.addOption("-P", workDir.absolutePath)
         req.addOption("-o", "%(title).150B [%(id)s].%(ext)s")
         req.addOption("-f", item.formatSelector)

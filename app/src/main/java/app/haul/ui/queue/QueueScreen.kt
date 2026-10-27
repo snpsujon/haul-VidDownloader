@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +62,7 @@ import app.haul.ui.theme.HIcon
 import app.haul.ui.theme.Haul
 import app.haul.ui.theme.HaulIcon
 import app.haul.util.Pretty
+import kotlinx.coroutines.delay
 
 /** Screens 11 (Queue) and 12 (Queue with an error). */
 @Composable
@@ -104,9 +106,13 @@ fun QueueScreen(vm: QueueViewModel, snack: SnackState, onOpenItem: (DownloadEnti
             if (s.waiting.isNotEmpty()) {
                 header("WAITING · ${s.waiting.size}")
                 items(s.waiting, key = { "w-${it.id}" }) { item ->
-                    WaitingRow(item, isFirst = item.id == s.waiting.first().id) {
-                        vm.moveToFront(item.id)
-                        snack.show("Moved to the front of the queue.")
+                    if (item.status == Status.RETRYING) {
+                        RetryingRow(item) { vm.retry(item.id) }
+                    } else {
+                        WaitingRow(item, isFirst = item.id == s.waiting.first().id) {
+                            vm.moveToFront(item.id)
+                            snack.show("Moved to the front of the queue.")
+                        }
                     }
                 }
             }
@@ -301,6 +307,32 @@ private fun WaitingRow(item: DownloadEntity, isFirst: Boolean, onMoveToFront: ()
             T(statusLine(item), mono(11.sp), c.textLow, maxLines = 1)
         }
         if (!isFirst) IconButton44(HaulIcon.Reorder, "Move to front", onMoveToFront, color = c.textLow, iconSize = 20.dp)
+    }
+    Divider()
+}
+
+/** A download that hit a temporary error, counting down to its next try. */
+@Composable
+private fun RetryingRow(item: DownloadEntity, onRetryNow: () -> Unit) {
+    val c = Haul.colors
+    val now by produceState(System.currentTimeMillis(), item.retryAt) {
+        while (value < item.retryAt) {
+            delay(1000)
+            value = System.currentTimeMillis()
+        }
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        MediaThumb(item, 54.dp, 54.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            T(item.title.ifBlank { Pretty.shortUrl(item.url) }, sans(14.sp, FontWeight.SemiBold), c.textHi, maxLines = 1)
+            T(statusLine(item, now = now), mono(11.sp), c.signal, maxLines = 1)
+            T(Errors.card(item.errorKind ?: ErrorKind.UNKNOWN, 0).title, sans(12.sp), c.textLow, maxLines = 1)
+        }
+        IconButton44(HaulIcon.Retry, "Retry now", onRetryNow, color = c.textMid, iconSize = 20.dp)
     }
     Divider()
 }
