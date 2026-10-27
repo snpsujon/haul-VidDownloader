@@ -90,6 +90,8 @@ class DownloadQueue(
                 metaArtist = req.metaArtist,
                 estimatedBytes = req.estimatedBytes,
                 codecs = req.codecs,
+                subtitleLang = req.subtitleLang,
+                subtitleMode = if (req.subtitleLang.isEmpty()) "" else req.subtitleMode.name,
                 status = Status.QUEUED,
                 position = pos,
             )
@@ -211,6 +213,8 @@ class DownloadQueue(
             }
             dao.setStatus(item.id, Status.PROCESSING)
             val saved = storage.save(result.file, s)
+            // Subtitle files go next to the video, with the same name, so players pick them up.
+            result.extras.forEach { f -> runCatching { storage.save(f, s) }.onFailure { Log.w(TAG, "could not save ${f.name}", it) } }
             val done = (dao.get(item.id) ?: item).copy(
                 status = Status.DONE,
                 progress = 1f,

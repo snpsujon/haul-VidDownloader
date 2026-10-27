@@ -15,6 +15,7 @@ import app.haul.data.AudioFormat
 import app.haul.data.Channel
 import app.haul.data.AppSettings.Companion.DEFAULT_FOLDER_LABEL
 import app.haul.data.ShareAction
+import app.haul.data.SubtitleMode
 import app.haul.data.Storage
 import app.haul.data.ThemeMode
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +30,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     val settings: StateFlow<AppSettings> = repo.settings.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
-    enum class Picker { Video, Audio, Share, Theme }
+    enum class Picker { Video, Audio, Share, Theme, Subtitles }
     var picker by mutableStateOf<Picker?>(null)
 
     // Engine -------------------------------------------------------------------------------------
@@ -100,6 +101,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setVideo(height: Int, container: String) = viewModelScope.launch { repo.setVideoPreset(height, container) }
     fun setAudio(format: AudioFormat, bitrate: Int, cover: Boolean) = viewModelScope.launch { repo.setAudioPreset(format, bitrate, cover) }
     fun setShare(a: ShareAction) = viewModelScope.launch { repo.setShareAction(a) }
+    fun setSubtitles(lang: String, mode: SubtitleMode) = viewModelScope.launch { repo.setSubtitles(lang, mode) }
     fun setConcurrent(n: Int) = viewModelScope.launch { repo.setConcurrent(n); g.queue.pump() }
     fun setMobileData(on: Boolean) = viewModelScope.launch { repo.setMobileData(on); g.queue.pump() }
     fun setAria2c(on: Boolean) = viewModelScope.launch { repo.setAria2c(on) }

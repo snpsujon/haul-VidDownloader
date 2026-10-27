@@ -217,6 +217,8 @@ class Storage(private val context: Context) {
                 "ogg" -> "audio/ogg"
                 "flac" -> "audio/flac"
                 "wav" -> "audio/wav"
+                "srt" -> "application/x-subrip"
+                "vtt" -> "text/vtt"
                 else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
             }
         }

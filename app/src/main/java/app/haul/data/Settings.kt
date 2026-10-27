@@ -25,6 +25,8 @@ enum class AudioFormat(val label: String, val ext: String) {
 
 enum class Channel(val label: String) { STABLE("Stable"), NIGHTLY("Nightly") }
 
+enum class SubtitleMode(val label: String) { EMBED("Embed in the video"), SRT("Save as an .srt file") }
+
 data class AppSettings(
     val onboarded: Boolean = false,
     val saveTreeUri: String? = null,
@@ -47,6 +49,9 @@ data class AppSettings(
     val appUpdateCheck: Boolean = true,
     val appLastCheck: Long = 0L,
     val skippedVersionCode: Int = 0,
+    /** Preferred subtitle language code, or empty for off. */
+    val subtitleLang: String = "",
+    val subtitleMode: SubtitleMode = SubtitleMode.EMBED,
 ) {
     /** "1080p MP4" */
     val videoPresetLabel: String get() = "${videoHeight}p ${videoContainer.uppercase()}"
@@ -100,6 +105,8 @@ class SettingsRepository(private val context: Context) {
         val appUpdateCheck = booleanPreferencesKey("app_update_check")
         val appLastCheck = longPreferencesKey("app_last_check")
         val skippedVersion = intPreferencesKey("skipped_version")
+        val subtitleLang = stringPreferencesKey("subtitle_lang")
+        val subtitleMode = stringPreferencesKey("subtitle_mode")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -125,6 +132,8 @@ class SettingsRepository(private val context: Context) {
             appUpdateCheck = p[K.appUpdateCheck] ?: true,
             appLastCheck = p[K.appLastCheck] ?: 0L,
             skippedVersionCode = p[K.skippedVersion] ?: 0,
+            subtitleLang = p[K.subtitleLang] ?: "",
+            subtitleMode = p[K.subtitleMode]?.let { runCatching { SubtitleMode.valueOf(it) }.getOrNull() } ?: SubtitleMode.EMBED,
         )
     }
 
@@ -157,4 +166,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppUpdateCheck(on: Boolean) = context.dataStore.edit { it[K.appUpdateCheck] = on }
     suspend fun setAppLastCheck(t: Long) = context.dataStore.edit { it[K.appLastCheck] = t }
     suspend fun setSkippedVersion(code: Int) = context.dataStore.edit { it[K.skippedVersion] = code }
+    suspend fun setSubtitles(lang: String, mode: SubtitleMode) = context.dataStore.edit {
+        it[K.subtitleLang] = lang
+        it[K.subtitleMode] = mode.name
+    }
 }

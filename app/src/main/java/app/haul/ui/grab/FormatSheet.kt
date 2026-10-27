@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.haul.data.AudioFormat
 import app.haul.data.MediaType
+import app.haul.data.SubtitleMode
 import app.haul.engine.MediaInfo
 import app.haul.ui.components.ChoiceRow
 import app.haul.ui.components.Divider
@@ -166,6 +167,7 @@ private fun ColumnScope.VideoTab(vm: GrabViewModel, onAllFormats: () -> Unit) {
             )
         }
     }
+    if (vm.subtitleTracks.isNotEmpty()) Subtitles(vm)
     val n = vm.info?.formats?.size ?: 0
     Spacer(Modifier.height(6.dp))
     Divider()
@@ -180,6 +182,35 @@ private fun ColumnScope.VideoTab(vm: GrabViewModel, onAllFormats: () -> Unit) {
         T("All $n formats", sans(14.sp), c.textHi)
         T(" · codecs, frame rates", sans(14.sp), c.textLow, Modifier.weight(1f))
         HIcon(HaulIcon.ChevRight, c.textLow, size = 18.dp)
+    }
+}
+
+@Composable
+private fun Subtitles(vm: GrabViewModel) {
+    val c = Haul.colors
+    Spacer(Modifier.height(18.dp))
+    SectionLabel("Subtitles")
+    Spacer(Modifier.height(10.dp))
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip("Off", vm.subtitleCode == null, { vm.subtitleCode = null }, hPad = 12.dp, height = 32.dp)
+        vm.subtitleTracks.forEach { t ->
+            FilterChip(
+                if (t.auto) "${t.name} · Auto" else t.name,
+                vm.subtitleCode == t.code,
+                { vm.subtitleCode = t.code },
+                hPad = 12.dp, height = 32.dp,
+            )
+        }
+    }
+    if (vm.subtitleCode != null) {
+        Spacer(Modifier.height(10.dp))
+        Segmented(
+            listOf("Embed", "Save .srt"),
+            if (vm.subtitleMode == SubtitleMode.EMBED) 0 else 1,
+            { vm.subtitleMode = if (it == 0) SubtitleMode.EMBED else SubtitleMode.SRT },
+            compact = true,
+            trackColor = c.surface1,
+        )
     }
 }
 

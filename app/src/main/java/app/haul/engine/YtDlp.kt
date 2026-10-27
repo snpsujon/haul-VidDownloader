@@ -5,6 +5,7 @@ import android.util.Log
 import app.haul.data.Channel
 import app.haul.data.DownloadEntity
 import app.haul.data.MediaType
+import app.haul.data.SubtitleMode
 import com.yausername.aria2c.Aria2c
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
@@ -20,7 +21,8 @@ import java.util.concurrent.TimeUnit
 
 class EngineException(message: String, val log: String, val canceled: Boolean = false) : Exception(message)
 
-data class DownloadResult(val file: File, val log: String)
+/** [extras] are files saved alongside the main one, such as .srt subtitles. */
+data class DownloadResult(val file: File, val log: String, val extras: List<File> = emptyList())
 
 /**
  * The on-device download engine: yt-dlp running on the bundled Python, with FFmpeg and aria2c.
@@ -126,6 +128,13 @@ class YtDlp(private val context: Context) {
         when (item.mediaType) {
             MediaType.VIDEO -> {
                 if (item.container.isNotEmpty()) req.addOption("--merge-output-format", item.container)
+                if (item.subtitleLang.isNotEmpty()) {
+                    req.addOption("--sub-langs", item.subtitleLang)
+                    req.addOption("--write-subs")
+                    req.addOption("--write-auto-subs")
+                    if (item.subtitleMode == SubtitleMode.SRT.name) req.addOption("--convert-subs", "srt")
+                    else req.addOption("--embed-subs")
+                }
             }
             MediaType.AUDIO -> {
                 if (item.audioFormat.isNotEmpty()) {
@@ -169,7 +178,10 @@ class YtDlp(private val context: Context) {
             }
             val all = log.toString() + res.out
             val file = findOutput(workDir) ?: throw EngineException("The download finished but no file was written.", all)
-            DownloadResult(file, all)
+            val subs = if (item.subtitleMode == SubtitleMode.SRT.name) {
+                workDir.listFiles()?.filter { it.isFile && it.extension.lowercase() in SUBTITLE_EXTS }.orEmpty()
+            } else emptyList()
+            DownloadResult(file, all, subs)
         } catch (e: YoutubeDL.CanceledException) {
             throw EngineException("Canceled", log.toString(), canceled = true)
         } catch (e: EngineException) {
@@ -232,7 +244,7 @@ class YtDlp(private val context: Context) {
     }.getOrNull()
 
     private fun findOutput(dir: File): File? {
-        val skip = setOf("part", "ytdl", "jpg", "jpeg", "png", "webp", "json", "temp", "tmp")
+        val skip = setOf("part", "ytdl", "jpg", "jpeg", "png", "webp", "json", "temp", "tmp") + SUBTITLE_EXTS
         return dir.listFiles()
             ?.filter { it.isFile && it.extension.lowercase() !in skip && !it.name.contains(".part") && !it.name.contains(".temp.") }
             ?.maxByOrNull { it.length() }
@@ -242,6 +254,7 @@ class YtDlp(private val context: Context) {
 
     companion object {
         private const val TAG = "YtDlp"
+        private val SUBTITLE_EXTS = setOf("srt", "vtt", "ass", "ttml", "srv3", "json3")
 
         /** yt-dlp release names look like "yt-dlp 2026.10.09"; keep the version only. */
         fun normaliseVersion(v: String): String = v.trim().removePrefix("yt-dlp").trim().ifEmpty { v }

@@ -37,6 +37,7 @@ import app.haul.BuildConfig
 import app.haul.data.AppSettings
 import app.haul.data.AudioFormat
 import app.haul.data.ShareAction
+import app.haul.data.SubtitleMode
 import app.haul.data.ThemeMode
 import app.haul.engine.FormatOptions
 import app.haul.ui.components.ChoiceRow
@@ -84,6 +85,11 @@ fun SettingsScreen(
                     SettingsRow("Save to", s.saveLabel, { folderSheet = true }, first = true, monoSubtitle = true)
                     SettingsRow("Default video quality", "${s.videoHeight}p ${s.videoContainer.uppercase()}", { vm.picker = SettingsViewModel.Picker.Video })
                     SettingsRow("Default audio format", s.audioPresetLong, { vm.picker = SettingsViewModel.Picker.Audio })
+                    SettingsRow(
+                        "Subtitles",
+                        if (s.subtitleLang.isBlank()) "Off" else "${FormatOptions.languageName(s.subtitleLang)}, ${s.subtitleMode.label.lowercase()}",
+                        { vm.picker = SettingsViewModel.Picker.Subtitles },
+                    )
                     SettingsRow("When a link is shared to Haul", s.shareAction.label, { vm.picker = SettingsViewModel.Picker.Share })
                     SettingsRow(
                         "Downloads at the same time", "More is faster but heavier on battery", null,
@@ -233,6 +239,29 @@ private fun Pickers(vm: SettingsViewModel, s: AppSettings) {
                 }
                 ChoiceRow(a.label, spec, "", s.shareAction == a, { vm.setShare(a); close() })
             }
+        }
+    }
+    HaulSheet(p == SettingsViewModel.Picker.Subtitles, close) {
+        SheetTitle("Subtitles", "Picked in the download sheet when a video has them in this language.")
+        val device = java.util.Locale.getDefault().language
+        val langs = listOf(device, "en").distinct()
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ChoiceRow("Off", "Choose per video", "", s.subtitleLang.isBlank(), { vm.setSubtitles("", s.subtitleMode) })
+            langs.forEach { l ->
+                ChoiceRow(
+                    FormatOptions.languageName(l), if (l == device) "Your phone's language" else "", "",
+                    s.subtitleLang == l, { vm.setSubtitles(l, s.subtitleMode) },
+                )
+            }
+        }
+        if (s.subtitleLang.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Segmented(
+                SubtitleMode.entries.map { if (it == SubtitleMode.EMBED) "Embed" else "Save .srt" },
+                s.subtitleMode.ordinal,
+                { vm.setSubtitles(s.subtitleLang, SubtitleMode.entries[it]) },
+                compact = true, trackColor = c.surface1,
+            )
         }
     }
     HaulSheet(p == SettingsViewModel.Picker.Theme, close) {

@@ -63,6 +63,12 @@ data class PlaylistEntry(
     val thumbnail: String?,
 )
 
+/** A subtitle language the site offers. [auto] marks machine captions. */
+data class SubtitleTrack(val code: String, val name: String, val auto: Boolean) {
+    /** "en" for "en", "en-US" and "en-orig". */
+    val language: String get() = code.substringBefore('-').lowercase()
+}
+
 data class MediaInfo(
     val url: String,
     val title: String,
@@ -74,6 +80,7 @@ data class MediaInfo(
     val formats: List<Fmt>,
     val isPlaylist: Boolean = false,
     val entries: List<PlaylistEntry> = emptyList(),
+    val subtitles: List<SubtitleTrack> = emptyList(),
 ) {
     val hasVideo: Boolean get() = formats.any { it.hasVideo }
 
@@ -101,7 +108,36 @@ data class MediaInfo(
                 formats = if (isPlaylist) emptyList() else parseFormats(o.optJSONArray("formats"), o),
                 isPlaylist = isPlaylist,
                 entries = entries,
+                subtitles = if (isPlaylist) emptyList() else parseSubtitles(o),
             )
+        }
+
+        private fun parseSubtitles(o: JSONObject): List<SubtitleTrack> {
+            val out = ArrayList<SubtitleTrack>()
+            o.optJSONObject("subtitles")?.let { subs ->
+                for (code in subs.keys()) {
+                    if (code == "live_chat" || code == "rechat") continue
+                    out += SubtitleTrack(code, trackName(subs, code), auto = false)
+                }
+            }
+            val manual = out.map { it.language }.toSet()
+            o.optJSONObject("automatic_captions")?.let { auto ->
+                val codes = auto.keys().asSequence().toList()
+                // YouTube lists a machine translation into every language; its own captions end in "-orig".
+                val originals = codes.filter { it.endsWith("-orig") }
+                val keep = originals.ifEmpty { if (codes.size <= 5) codes else emptyList() }
+                for (code in keep) {
+                    val t = SubtitleTrack(code, trackName(auto, code), auto = true)
+                    if (t.language !in manual) out += t
+                }
+            }
+            return out.sortedWith(compareBy<SubtitleTrack> { it.auto }.thenBy { it.name })
+        }
+
+        private fun trackName(group: JSONObject, code: String): String {
+            val name = group.optJSONArray(code)?.optJSONObject(0)?.optStringOrNull("name")
+            return name?.substringBefore(" (")?.takeIf { it.isNotBlank() }
+                ?: FormatOptions.languageName(code.removeSuffix("-orig"))
         }
 
         private fun parseEntries(arr: JSONArray?, parent: JSONObject): List<PlaylistEntry> {

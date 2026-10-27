@@ -18,6 +18,8 @@ import app.haul.engine.Errors
 import app.haul.engine.Fmt
 import app.haul.engine.FormatOptions
 import app.haul.engine.MediaInfo
+import app.haul.engine.SubtitleTrack
+import app.haul.data.SubtitleMode
 import app.haul.engine.VideoChoice
 import app.haul.util.Links
 import app.haul.util.Pretty
@@ -65,6 +67,11 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var audioLanguage by mutableStateOf<String?>(null)
         private set
+    var subtitleTracks by mutableStateOf<List<SubtitleTrack>>(emptyList())
+        private set
+    /** Picked subtitle track code, null for off. */
+    var subtitleCode by mutableStateOf<String?>(null)
+    var subtitleMode by mutableStateOf(SubtitleMode.EMBED)
 
     // All formats
     var allFilter by mutableStateOf(0)
@@ -172,6 +179,9 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
         audioChoices = FormatOptions.audioChoices(info, mp3Bitrate, audioLanguage)
         audioFormat = audioChoices.firstOrNull { it.format == s.audioFormat }?.format ?: AudioFormat.MP3
         embedCover = s.embedCover
+        subtitleTracks = info.subtitles
+        subtitleCode = FormatOptions.defaultSubtitle(info.subtitles, s.subtitleLang)?.code
+        subtitleMode = s.subtitleMode
         metaTitle = info.title
         metaArtist = info.uploader
         tab = if (info.hasVideo && videoChoices.isNotEmpty()) MediaType.VIDEO else MediaType.AUDIO
@@ -211,7 +221,9 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
     fun download(onQueued: () -> Unit) {
         val i = info ?: return
         val req = when (tab) {
-            MediaType.VIDEO -> selectedVideo?.let { FormatOptions.videoRequest(it) }
+            MediaType.VIDEO -> selectedVideo?.let { v ->
+                FormatOptions.videoRequest(v).let { r -> subtitleCode?.let { r.copy(subtitleLang = it, subtitleMode = subtitleMode) } ?: r }
+            }
             MediaType.AUDIO -> selectedAudio?.let {
                 FormatOptions.audioRequest(
                     it, mp3Bitrate, embedCover,

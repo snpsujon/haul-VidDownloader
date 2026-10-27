@@ -2,6 +2,7 @@ package app.haul.engine
 
 import app.haul.data.AudioFormat
 import app.haul.data.MediaType
+import app.haul.data.SubtitleMode
 import java.util.Locale
 
 /** A quality row in the Video tab of the format picker. */
@@ -43,6 +44,8 @@ data class DownloadRequest(
     val metaArtist: String? = null,
     val estimatedBytes: Long = 0,
     val codecs: String? = null,
+    val subtitleLang: String = "",       // yt-dlp language code; empty for none
+    val subtitleMode: SubtitleMode = SubtitleMode.EMBED,
 )
 
 object FormatOptions {
@@ -57,6 +60,10 @@ object FormatOptions {
             AudioTrack(code, languageName(code), fs.any { it.languagePreference >= 10 || it.note.contains("original", ignoreCase = true) })
         }.sortedWith(compareByDescending<AudioTrack> { it.original }.thenBy { it.label })
     }
+
+    /** The track to preselect for the preferred language from Settings; manual subtitles first. */
+    fun defaultSubtitle(tracks: List<SubtitleTrack>, preferred: String): SubtitleTrack? =
+        if (preferred.isBlank()) null else tracks.filter { it.language == preferred.lowercase() }.minByOrNull { it.auto }
 
     fun languageName(code: String): String {
         val name = Locale.forLanguageTag(code).displayName
