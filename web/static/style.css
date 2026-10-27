@@ -159,3 +159,9 @@ footer p{margin:0}
 .sitelinks{display:flex;flex-wrap:wrap;gap:8px}
 .sitelinks a{padding:6px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--hi);font-size:14px}
 .sitelinks a:hover{border-color:var(--signal)}
+.sitesearch{width:100%;height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--s1);color:var(--hi);font:inherit;outline:none;margin:8px 0 16px}
+.sitesearch:focus{border-color:var(--signal)}
+.doc ul.sitelist{list-style:none;padding:0;columns:3 180px;column-gap:24px;font-size:14px;line-height:22px}
+.sitelist li{break-inside:avoid;margin:0 0 4px}
+.login{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--low);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:1px}
+p.lead a{color:inherit}

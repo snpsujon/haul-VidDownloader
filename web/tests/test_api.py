@@ -383,3 +383,11 @@ def test_helper_builds_and_install_script(client, monkeypatch):
     assert sh.headers["content-type"].startswith("text/plain") and "\r" not in sh.text
     assert sh.text.startswith("#!/bin/sh") and 'SITE="${HAUL_SITE:-http://testserver}"' in sh.text
     client.delete("/api/admin/releases/helper", headers=h)
+
+
+def test_supported_sites_page(client):
+    r = client.get("/sites")
+    assert r.status_code == 200 and "<h1>Supported sites</h1>" in r.text
+    assert 'data-n="youtube"' in r.text and 'data-n="generic"' not in r.text
+    assert r.text.count("<li data-n=") > 1000
+    assert 'href="sites"' in client.get("/").text
