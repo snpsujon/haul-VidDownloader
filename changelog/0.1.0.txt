@@ -1,1 +1,8 @@
 - First release
+- Pick the audio language on videos with several audio tracks
+- Subtitles: embed them in the video or save an .srt file
+- Sign in to sites for private, members-only and age-restricted videos
+- Failed downloads retry on their own after connection drops
+- Crash reports you can copy or share
+- Send links from your PC browser straight to your phone
+- Better YouTube support with a built-in JavaScript runtime
