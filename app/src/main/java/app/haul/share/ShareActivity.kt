@@ -70,7 +70,8 @@ class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        val text = intent?.getStringExtra(Intent.EXTRA_TEXT) ?: intent?.dataString
+        val text = intent?.data?.takeIf { it.scheme == "haul" }?.getQueryParameter("url")
+            ?: intent?.getStringExtra(Intent.EXTRA_TEXT) ?: intent?.dataString
         val url = Links.extract(text)
         if (url == null) {
             Toast.makeText(this, "Haul couldn't find a link in what was shared.", Toast.LENGTH_LONG).show()

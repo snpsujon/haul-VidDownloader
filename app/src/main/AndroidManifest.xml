@@ -57,6 +57,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- haul://save?url=<encoded link>, e.g. from a QR code made by the browser extension. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="haul" android:host="save" />
+            </intent-filter>
         </activity>
 
         <service
