@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import secrets
 import shutil
 import threading
 import time
@@ -17,7 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
-from . import config
+from . import apkinfo, config
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 ABIS = ("universal", "arm64-v8a", "armeabi-v7a", "x86_64")
@@ -233,44 +234,93 @@ def admin_router(require_admin) -> APIRouter:
 
     @r.post("/android", summary="Publish a new Android app version")
     async def upload_android(
-        version_name: str = Form(..., max_length=40),
-        version_code: int = Form(..., ge=1),
-        min_supported: int = Form(0, ge=0),
+        apks: list[UploadFile] = File(default_factory=list),
+        version_file: UploadFile | None = File(None),
         changelog: str = Form(""),
+        force_update: bool = Form(False),
+        version_name: str = Form("", max_length=40),
+        version_code: int = Form(0, ge=0),
+        min_supported: int | None = Form(None, ge=0),
         universal: UploadFile | None = File(None),
         arm64_v8a: UploadFile | None = File(None, alias="arm64-v8a"),
         armeabi_v7a: UploadFile | None = File(None, alias="armeabi-v7a"),
         x86_64: UploadFile | None = File(None),
     ):
-        files = {"universal": universal, "arm64-v8a": arm64_v8a, "armeabi-v7a": armeabi_v7a, "x86_64": x86_64}
-        files = {abi: f for abi, f in files.items() if _given(f)}
+        """Drop the APKs; the version and CPU type are read from each one. A version.json from
+        scripts/package_release.py can come along for its changelog and minimum version."""
+        files = [f for f in [*apks, universal, arm64_v8a, armeabi_v7a, x86_64] if _given(f)]
         if not files:
-            raise HTTPException(400, "Pick at least one APK (the universal one works on every phone).")
-        for f in files.values():
-            if not f.filename.lower().endswith(".apk"):
-                raise HTTPException(400, f"{f.filename} isn't an .apk file.")
-        if not re.fullmatch(r"[0-9A-Za-z.+_-]+", version_name):
-            raise HTTPException(400, "Write the version like 1.3.0.")
-        prev = load()["android"] or {}
-        if prev.get("versionCode") and version_code < prev["versionCode"]:
-            raise HTTPException(400, f"The version code has to be at least {prev['versionCode']} (the current one), or phones won't update.")
-        apks = {}
+            raise HTTPException(400, "Pick the APK to publish (app-universal-release.apk works on every phone).")
+        extra: dict = {}
+        if _given(version_file):
+            try:
+                extra = json.loads((await version_file.read(1 << 20)).decode("utf-8-sig"))
+                assert isinstance(extra, dict)
+            except (ValueError, AssertionError):
+                raise HTTPException(400, "That version.json couldn't be read.")
+        staging = root() / "android" / f".incoming-{secrets.token_hex(4)}"
+        found: dict[str, dict] = {}
         try:
-            for abi, f in files.items():
-                name = f"haul-{version_name}-{abi}.apk"
-                apks[abi] = await store(f, root() / "android" / name)
-        except UploadError as e:
-            raise HTTPException(400, str(e))
+            for i, f in enumerate(files):
+                if not f.filename.lower().endswith(".apk"):
+                    raise HTTPException(400, f"{f.filename} isn't an .apk file.")
+                tmp = staging / f"{i}.apk"
+                try:
+                    stored = await store(f, tmp)
+                    info = apkinfo.read(tmp)
+                except (UploadError, apkinfo.NotAnApk) as e:
+                    raise HTTPException(400, f"{f.filename}: {e}")
+                if (info["package"] or "").endswith(".debug"):
+                    raise HTTPException(400, f"{f.filename} is a debug build. Upload the release APK "
+                                             "(app/build/outputs/apk/release).")
+                if info["abi"] in found:
+                    raise HTTPException(400, f"Two of these APKs are both for {info['abi']}. Pick one of each.")
+                found[info["abi"]] = {**stored, **info, "tmp": tmp}
+            names = {v["version_name"] for v in found.values()}
+            if len(names) > 1:
+                raise HTTPException(400, "These APKs are different versions (" + ", ".join(sorted(names)) + "). Upload one version at a time.")
+            name = version_name.strip() or names.pop()
+            code = version_code or max(v["version_code"] for v in found.values())
+            if not re.fullmatch(r"[0-9A-Za-z.+_-]+", name):
+                raise HTTPException(400, "The version inside that APK has unusual characters.")
+            prev = load()["android"] or {}
+            if prev.get("package") and found and next(iter(found.values()))["package"] not in (None, prev["package"]):
+                raise HTTPException(400, "That APK is a different app from the one published.")
+            if prev.get("versionCode") and code < prev["versionCode"]:
+                raise HTTPException(400, f"This APK is version {name} ({code}), older than the published "
+                                         f"{prev['versionName']} ({prev['versionCode']}). Phones only update to a newer version.")
+            notes = [line.strip("-• \t") for line in changelog.splitlines() if line.strip()]
+            if not notes and isinstance(extra.get("changelog"), list):
+                notes = [str(x) for x in extra["changelog"]][:30]
+            if force_update:
+                minimum = code
+            elif min_supported is not None:
+                minimum = min_supported
+            elif isinstance(extra.get("minSupported"), int):
+                minimum = extra["minSupported"]
+            else:
+                minimum = 0
+            apk_rows = {}
+            for abi, v in found.items():
+                final = f"haul-{name}-{abi}.apk"
+                v["tmp"].replace(root() / "android" / final)
+                apk_rows[abi] = {"file": final, "size": v["size"], "sha256": v["sha256"]}
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
         with _lock:
             d = load()
+            # APKs for other CPUs from the same version stay published.
+            old = d["android"] or {}
+            if old.get("versionName") == name and old.get("versionCode") == code:
+                apk_rows = {**old.get("apks", {}), **apk_rows}
             d["android"] = {
-                "versionName": version_name, "versionCode": version_code, "minSupported": min_supported,
-                "changelog": [line.strip("-• \t") for line in changelog.splitlines() if line.strip()],
-                "apks": apks, "updated": time.time(),
+                "versionName": name, "versionCode": code, "minSupported": minimum,
+                "changelog": notes or (old.get("changelog", []) if old.get("versionCode") == code else []),
+                "apks": apk_rows, "package": next(iter(found.values()))["package"], "updated": time.time(),
             }
             _save(d)
-        _remove_files(root() / "android", {v["file"] for v in apks.values()})
-        return {"ok": True}
+        _remove_files(root() / "android", {v["file"] for v in apk_rows.values()})
+        return {"ok": True, "version": name, "version_code": code, "apks": sorted(apk_rows), "min_supported": minimum}
 
     async def _upload_single(slot: str, version: str, notes: str, store_url: str | None,
                              file: UploadFile | None, exts: tuple[str, ...], builds: dict | None = None):

@@ -273,7 +273,7 @@
       var p = r.public;
       $('uplimit').textContent = 'Up to ' + r.max_upload_mb + ' MB per file';
       var a = p.android;
-      $('rel-android').innerHTML = a ? esc('Version ' + a.version + ' (' + a.version_code + ') · ' + Object.keys(a.apks).join(', ') + ' · ' + day(a.updated)) + ' · <a href="' + esc(a.url) + '">download</a>' : 'Not uploaded yet';
+      $('rel-android').innerHTML = a ? esc('Version ' + a.version + ' (' + a.version_code + ') · ' + Object.keys(a.apks).join(', ') + ' · ' + day(a.updated)) + ' · <a href="' + esc(a.url) + '">download</a> · <a href="app/version.json" target="_blank">version.json</a>' : 'Not uploaded yet';
       ['extension', 'helper'].forEach(function (k) {
         var x = p[k];
         $('rel-' + k).innerHTML = x ? esc([x.version ? 'Version ' + x.version : '', x.builds ? Object.keys(x.builds).join(', ') : x.size ? bytes(x.size) : '', x.store_url ? 'store link' : '', day(x.updated)].filter(Boolean).join(' · ')) +
@@ -281,7 +281,6 @@
         var f = $('f-' + k);
         if (x) { if (x.version) f.version.value = x.version; if (f.notes) f.notes.value = x.notes || ''; if (f.store_url) f.store_url.value = x.store_url || ''; }
       });
-      if (a) { $('f-android').min_supported.value = $('f-android').min_supported.value || 0; }
       $('files').tBodies[0].innerHTML = p.files.map(function (f) {
         return '<tr><td class="title"><b>' + esc(f.title) + '</b><a href="' + esc(f.url) + '">' + esc(f.name) + '</a></td><td class="mono">' + esc(bytes(f.size)) + '</td><td class="mono">' + esc(day(f.updated)) + '</td>' +
           '<td><button class="linkbtn" type="button" data-delfile="' + esc(f.name) + '">Remove</button></td></tr>';
@@ -290,26 +289,83 @@
   }
 
   // XHR, not fetch, so big uploads can show progress.
-  function upload(path, form, done) {
-    var xhr = new XMLHttpRequest(), bar = $('upbar');
+  // XHR, not fetch, so big uploads can show progress. The progress box sits under the form's
+  // buttons: bytes sent, speed and time left, then "checking" while the server works.
+  var busy = false;
+  function upload(path, form, done, data) {
+    if (busy) return;
+    var box = form.querySelector('.progress');
+    if (!box) { box = document.createElement('div'); box.className = 'progress'; form.appendChild(box); }
+    box.className = 'progress';
+    box.innerHTML = '<div class="upbar"><i></i></div><div class="ptext"></div>';
+    var bar = box.querySelector('i'), text = box.querySelector('.ptext');
+    var btn = form.querySelector('button[type=submit]'), label = btn.textContent;
+    var started = Date.now();
+    function setText(msg, cls) { text.textContent = msg; box.className = 'progress' + (cls ? ' ' + cls : ''); }
+    function finish() { busy = false; btn.disabled = false; btn.textContent = label; }
+    busy = true; btn.disabled = true; btn.textContent = 'Publishing…';
+    hint('relhint', '');
+    setText('Starting upload…');
+
+    var xhr = new XMLHttpRequest();
     xhr.open('POST', 'api/admin/releases/' + path);
     xhr.setRequestHeader('X-Admin-Token', token);
-    show('upbar', true); bar.firstChild.style.width = '0';
     xhr.upload.onprogress = function (e) {
-      if (e.lengthComputable) { bar.firstChild.style.width = (e.loaded / e.total * 100) + '%'; hint('relhint', 'Uploading… ' + Math.round(e.loaded / e.total * 100) + '%'); }
+      if (!e.lengthComputable) return;
+      var pct = e.loaded / e.total * 100, secs = (Date.now() - started) / 1000, speed = e.loaded / Math.max(secs, 0.1);
+      var left = speed > 0 ? (e.total - e.loaded) / speed : 0;
+      bar.style.width = pct + '%';
+      setText('Step 1 of 2 · Uploading ' + Math.floor(pct) + '% · ' + bytes(e.loaded) + ' of ' + bytes(e.total) + ' · ' +
+        bytes(speed) + '/s' + (left > 1 ? ' · about ' + (left > 90 ? Math.round(left / 60) + ' min' : Math.round(left) + ' s') + ' left' : ''));
+    };
+    xhr.upload.onload = function () {
+      bar.style.width = '100%'; box.classList.add('working');
+      setText(path === 'android' ? 'Step 2 of 2 · Checking the APK and publishing…' : 'Step 2 of 2 · Saving and publishing…');
     };
     xhr.onload = function () {
-      show('upbar', false);
+      finish(); box.classList.remove('working');
       var d = {}; try { d = JSON.parse(xhr.responseText); } catch (e) { }
       if (xhr.status === 401) { setToken(null); screen('login'); return; }
-      if (xhr.status >= 400) { hint('relhint', typeof d.detail === 'string' ? d.detail : 'Upload failed (' + xhr.status + ').', true); return; }
-      hint('relhint', 'Published.'); form.reset(); loadReleases(); if (done) done();
+      if (xhr.status === 413) { setText('The file is too big for the server or the proxy in front of it (like nginx or Cloudflare).', 'bad'); return; }
+      if (xhr.status >= 400) { setText(typeof d.detail === 'string' ? d.detail : 'Publishing failed (error ' + xhr.status + ').', 'bad'); return; }
+      setText('✓ ' + (d.version ? 'Published version ' + d.version + ' (' + d.version_code + ') for ' + d.apks.join(', ') + '. Phones will see the update.' : 'Published.'), 'ok');
+      form.reset(); loadReleases(); if (done) done();
     };
-    xhr.onerror = function () { show('upbar', false); hint('relhint', 'The upload was cut off. Try again.', true); };
-    xhr.send(new FormData(form));
+    xhr.onerror = function () { finish(); setText('The upload was cut off. Check your connection and try again.', 'bad'); };
+    xhr.send(data || new FormData(form));
   }
 
-  ['android', 'extension', 'helper', 'files'].forEach(function (k) {
+  // Android: drop APKs (and optionally the version.json from package_release.py).
+  var apkFiles = [];
+  function showApks() {
+    $('apklist').innerHTML = apkFiles.map(function (f, i) {
+      return '<li><span>' + esc(f.name) + '</span><span class="mono">' + esc(bytes(f.size)) + '</span><button type="button" class="linkbtn" data-unpick="' + i + '">Remove</button></li>';
+    }).join('');
+  }
+  function addApks(list) {
+    [].forEach.call(list, function (f) {
+      if (/\.(apk|json)$/i.test(f.name) && !apkFiles.some(function (g) { return g.name === f.name; })) apkFiles.push(f);
+    });
+    showApks();
+  }
+  $('apkfiles').addEventListener('change', function () { addApks(this.files); this.value = ''; });
+  var drop = $('apkdrop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function () { drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { e.preventDefault(); addApks(e.dataTransfer.files); });
+  $('apklist').addEventListener('click', function (e) {
+    var i = e.target.getAttribute('data-unpick'); if (i === null) return;
+    apkFiles.splice(+i, 1); showApks();
+  });
+  $('f-android').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!apkFiles.some(function (f) { return /\.apk$/i.test(f.name); })) { hint('relhint', 'Pick the APK first.', true); return; }
+    var data = new FormData(this);
+    apkFiles.forEach(function (f) { data.append(/\.json$/i.test(f.name) ? 'version_file' : 'apks', f); });
+    upload('android', this, function () { apkFiles = []; showApks(); }, data);
+  });
+
+  ['extension', 'helper', 'files'].forEach(function (k) {
     $('f-' + k).addEventListener('submit', function (e) { e.preventDefault(); upload(k, this); });
   });
   $('releases').addEventListener('click', function (e) {

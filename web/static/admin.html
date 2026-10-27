@@ -76,23 +76,19 @@
     <!-- Downloads offered on the page -->
     <div class="card" id="releases">
       <div class="chead"><div class="label">App, extension and helper downloads</div><span class="label" id="uplimit"></span></div>
-      <p class="sub" style="margin-top:8px">What you upload here shows on the main page under "Get Haul". Uploading the Android app also publishes the update file the app checks (<code>/app/version.json</code>), so phones get the new version.</p>
+      <p class="sub" style="margin-top:8px">What you upload here shows on the main page under "Get Haul". Publishing the Android app also writes the update file the app checks (<code>/app/version.json</code>) for you, so there's nothing else to upload and phones get the new version.</p>
 
       <div class="rel">
         <div class="relhead"><b>Android app</b><span class="sub" id="rel-android"></span></div>
         <form id="f-android" class="relform">
-          <div class="opts">
-            <label>Version<input name="version_name" placeholder="1.3.0" required></label>
-            <label>Version code<input name="version_code" type="number" min="1" placeholder="10300" required></label>
-            <label>Oldest allowed<input name="min_supported" type="number" min="0" value="0" title="Phones below this version code must update"></label>
-          </div>
-          <label class="block">What's new (one per line)<textarea name="changelog" rows="3" placeholder="Faster playlist downloads&#10;Bug fixes"></textarea></label>
-          <div class="opts">
-            <label>Universal APK (works on every phone)<input type="file" name="universal" accept=".apk"></label>
-            <label>arm64-v8a (most phones)<input type="file" name="arm64-v8a" accept=".apk"></label>
-            <label>armeabi-v7a (older phones)<input type="file" name="armeabi-v7a" accept=".apk"></label>
-            <label>x86_64<input type="file" name="x86_64" accept=".apk"></label>
-          </div>
+          <label class="drop" id="apkdrop">
+            <input type="file" id="apkfiles" accept=".apk,.json" multiple>
+            <b>Drop the APK here, or click to pick it</b>
+            <span>From <code>app/build/outputs/apk/release</code>. <code>app-universal-release.apk</code> works on every phone; you can add the per-CPU ones too. The version is read from the APK.</span>
+          </label>
+          <ul class="picked" id="apklist"></ul>
+          <label class="block">What's new (optional, one per line)<textarea name="changelog" rows="3" placeholder="Faster playlist downloads&#10;Bug fixes"></textarea></label>
+          <label class="check"><input type="checkbox" name="force_update" value="true"> Make everyone update (older versions stop working until they do)</label>
           <div class="actions"><button class="btn small" type="submit">Publish app</button><button class="btn small ghost" type="button" data-unpublish="android">Remove</button></div>
         </form>
       </div>

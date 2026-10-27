@@ -91,6 +91,9 @@ they survive rebuilds when that folder is a volume.
   Mac and Linux users install with `curl -fsSL <site>/install.sh | sh` (add `-s uninstall` to remove);
   `static/install.sh` is served as plain text with LF line endings, pointed at this site.
 - `/helper` is a download page for the PC helper with setup steps, for linking from the extension.
+- Publishing the Android app: drop the release APK(s) on the admin page. The version name, version
+  code and CPU type are read from each APK; debug builds and older versions are refused. A
+  `version.json` from `scripts/package_release.py` can be dropped too, for its changelog.
 - `GET /app/version.json` is the Android app's update file (same format as
   `scripts/package_release.py`), published when you upload APKs. The version code can't go down.
 - `GET /api/releases` lists everything as JSON and is open to any origin.

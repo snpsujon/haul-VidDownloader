@@ -35,7 +35,7 @@ table.t .empty{color:var(--low);text-align:center;padding:20px}
 .relhead{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px}
 .relhead .sub{margin:0}
 .relform .opts{margin-bottom:10px}
-.relform input:not([type=file]),.relform textarea{height:40px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--s1);outline:none;min-width:120px}
+.relform input:not([type=file]):not([type=checkbox]),.relform textarea{height:40px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--s1);outline:none;min-width:120px}
 .relform textarea{height:auto;padding:8px 10px;width:100%;resize:vertical}
 .relform input[type=file]{font-size:13px;max-width:260px}
 .relform label.grow{flex:1;min-width:220px}
@@ -60,3 +60,24 @@ table.t .empty{color:var(--low);text-align:center;padding:20px}
 .rate i{display:block;height:100%}
 .rate i.ok{background:var(--ok)}.rate i.warn{background:var(--signal)}.rate i.bad{background:var(--bad)}
 .seg.small button{height:30px;padding:0 10px;font-size:12px}
+
+.drop{position:relative;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;padding:24px 16px;border:2px dashed var(--line);border-radius:12px;background:var(--s1);cursor:pointer;margin-bottom:10px}
+.drop:hover,.drop.over{border-color:var(--signal)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop b{font-size:15px}
+.drop span{font-size:13px;color:var(--mid);max-width:520px}
+ul.picked{list-style:none;margin:0 0 10px;padding:0}
+ul.picked li{display:flex;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--divider);font-size:14px}
+ul.picked li span:first-child{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.relform label.check{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--mid);margin-bottom:10px}
+
+.progress{margin-top:12px}
+.progress .upbar{height:8px;border-radius:4px;background:var(--s2);overflow:hidden;margin:0}
+.progress .upbar i{display:block;height:100%;width:0;background:var(--signal);transition:width .2s}
+.progress.working .upbar i{background:linear-gradient(90deg,var(--signal) 0,var(--signal) 40%,color-mix(in srgb,var(--signal) 45%,transparent) 50%,var(--signal) 60%,var(--signal) 100%);background-size:200% 100%;animation:pslide 1.2s linear infinite}
+@keyframes pslide{from{background-position:100% 0}to{background-position:-100% 0}}
+.progress .ptext{font-size:13px;color:var(--mid);margin-top:6px;font-family:'JetBrains Mono',monospace}
+.progress.ok .ptext{color:var(--ok)}
+.progress.bad .ptext{color:var(--bad)}
+.progress.ok .upbar i{background:var(--ok)}
+.progress.bad .upbar i{background:var(--bad)}

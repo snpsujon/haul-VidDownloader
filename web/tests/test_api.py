@@ -1,4 +1,6 @@
+import io
 import time
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,19 @@ from app import config, engine, main
 from tests.fake_info import youtube_info
 
 URL = "https://www.youtube.com/watch?v=abc"
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def make_apk(libs, manifest="release-manifest.bin"):
+    """A tiny APK: the real Haul release manifest (version 0.1.0, code 100) plus lib/ folders."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("AndroidManifest.xml", (FIXTURES / manifest).read_bytes())
+        for abi in libs:
+            z.writestr(f"lib/{abi}/libx.so", b"so")
+    return buf.getvalue()
 
 
 @pytest.fixture
@@ -219,19 +234,31 @@ def test_releases_upload_and_downloads(client, monkeypatch):
     h = {"X-Admin-Token": client.post("/api/admin/login", json={"password": "pw"}).json()["token"]}
     assert client.get("/api/releases").json() == {"android": None, "extension": None, "helper": None, "files": []}
     assert client.get("/app/version.json").status_code == 404
-    r = client.post("/api/admin/releases/android", headers=h,
-                    data={"version_name": "1.3.0", "version_code": "10300", "changelog": "- Faster\n- Fixes"},
-                    files={"universal": ("app-universal-release.apk", b"APK-U"), "arm64-v8a": ("a.apk", b"APK-A")})
+    r = client.post("/api/admin/releases/android", headers=h, data={"changelog": "- Faster\n- Fixes"},
+                    files=[("apks", ("app-universal-release.apk", make_apk(["arm64-v8a", "x86_64"]))),
+                           ("apks", ("app-arm64-v8a-release.apk", make_apk(["arm64-v8a"])))])
     assert r.status_code == 200, r.text
+    assert r.json()["version"] == "0.1.0" and r.json()["apks"] == ["arm64-v8a", "universal"]
     v = client.get("/app/version.json").json()
-    assert v["versionName"] == "1.3.0" and v["changelog"] == ["Faster", "Fixes"]
-    assert v["apks"]["universal"]["url"].endswith("/app/haul-1.3.0-universal.apk")
-    assert client.get("/get/android").content == b"APK-U"
-    assert client.get("/app/haul-1.3.0-arm64-v8a.apk").content == b"APK-A"
-    # an older version code is refused
-    bad = client.post("/api/admin/releases/android", headers=h, data={"version_name": "1.2", "version_code": "1"},
-                      files={"universal": ("x.apk", b"x")})
-    assert bad.status_code == 400
+    assert v["versionName"] == "0.1.0" and v["versionCode"] == 100 and v["changelog"] == ["Faster", "Fixes"]
+    assert v["apks"]["universal"]["url"].endswith("/app/haul-0.1.0-universal.apk")
+    assert client.get("/get/android").content == make_apk(["arm64-v8a", "x86_64"])
+    # Adding one more CPU build of the same version keeps the others and the changelog.
+    client.post("/api/admin/releases/android", headers=h, data={"force_update": "true"},
+                files=[("apks", ("app-x86_64-release.apk", make_apk(["x86_64"])))])
+    v = client.get("/app/version.json").json()
+    assert set(v["apks"]) == {"universal", "arm64-v8a", "x86_64"} and v["changelog"] == ["Faster", "Fixes"]
+    assert v["minSupported"] == 100
+    # Debug builds, non-APKs, and older versions are refused.
+    dbg = client.post("/api/admin/releases/android", headers=h,
+                      files=[("apks", ("Haul-debug.apk", make_apk([], manifest="debug-manifest.bin")))])
+    assert dbg.status_code == 400 and "debug build" in dbg.json()["detail"]
+    assert client.post("/api/admin/releases/android", headers=h,
+                       files=[("apks", ("x.apk", b"not a zip"))]).status_code == 400
+    from app import apkinfo
+    monkeypatch.setattr(apkinfo, "manifest_versions", lambda b: (50, "0.0.5", "app.haul.android"))
+    old = client.post("/api/admin/releases/android", headers=h, files=[("apks", ("old.apk", make_apk([])))])
+    assert old.status_code == 400 and "older" in old.json()["detail"]
     assert client.post("/api/admin/releases/helper", headers=h, data={"version": "1.0"},
                        files={"file": ("haul-helper.exe", b"MZ")}).status_code == 200
     assert client.get("/get/helper").content == b"MZ"
