@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Haul settings</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { padding: 32px 16px 48px; }
+    .wrap { max-width: 620px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 24px; display: flex; align-items: center; gap: 10px; }
+    h2 { font-size: 15px; margin: 0 0 4px; }
+    section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+    label.choice { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+    label.choice input { margin-top: 3px; accent-color: var(--signal); }
+    ol { padding-left: 20px; margin: 10px 0; }
+    ol li { margin: 6px 0; }
+    code { background: var(--ground); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 12px; }
+    .status { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-weight: 600; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+    .dot.ok { background: var(--ok); }
+    .dot.bad { background: var(--danger); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .row input { flex: 1; min-width: 200px; }
+    .saved { color: var(--ok); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1><img src="icons/icon48.png" width="32" height="32" alt=""> Haul settings</h1>
+
+    <section>
+      <h2>Send to phone</h2>
+      <p class="muted">What the QR code holds when you scan it with your phone.</p>
+      <label class="choice"><input type="radio" name="qrMode" value="haul">
+        <span><strong>Open straight in Haul</strong><br><span class="muted">Needs the latest Haul app on the phone.</span></span></label>
+      <label class="choice"><input type="radio" name="qrMode" value="plain">
+        <span><strong>Plain page link</strong><br><span class="muted">Opens the page on the phone. Tap Share, then Haul. Works with any version.</span></span></label>
+    </section>
+
+    <section id="desktop">
+      <h2>Download on this PC</h2>
+      <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking…</span></div>
+      <div id="details" class="muted small"></div>
+
+      <div id="setupSteps" hidden>
+        <p>To save videos on this computer, Haul needs its small helper app. You only do this once.</p>
+        <ol>
+          <li>Get <code>haul-helper.exe</code>. It's in the <code>helper</code> folder next to the <code>chrome</code> folder.</li>
+          <li>Double-click it. It copies itself to your user folder, downloads yt-dlp and FFmpeg (about 150 MB), and connects to Chrome, Edge and Brave. No admin rights needed.</li>
+          <li>If Windows shows "Windows protected your PC", click <em>More info</em>, then <em>Run anyway</em>. That happens because the helper isn't code-signed yet.</li>
+          <li>When it says it's done, come back here and click <em>Check again</em>.</li>
+        </ol>
+      </div>
+
+      <div class="row">
+        <button id="recheck" class="btn small">Check again</button>
+        <button id="update" class="btn small" hidden>Update yt-dlp</button>
+      </div>
+
+      <div id="folderBox" hidden>
+        <h2 style="margin-top:18px">Save to</h2>
+        <p class="muted small">Leave empty to use <span id="defaultFolder"></span>.</p>
+        <div class="row">
+          <input id="folder" type="text" placeholder="C:\Users\you\Videos" spellcheck="false">
+          <button id="saveFolder" class="btn small">Save</button>
+          <button id="openFolder" class="btn small">Open</button>
+        </div>
+        <div id="folderSaved" class="saved" hidden>Saved</div>
+      </div>
+    </section>
+
+    <p class="muted small">Only save videos you have the right to download.</p>
+  </div>
+  <script src="common.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

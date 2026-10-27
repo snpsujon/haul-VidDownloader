@@ -1,0 +1,16 @@
+services:
+  haul:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      HAUL_UPDATE_ON_START: "1"
+      # HAUL_API_KEYS: "change-me"          # turn on to require an API key
+      # HAUL_COOKIES_FILE: /data/cookies.txt # for sites that ask the server to sign in
+      # HAUL_TRUST_PROXY: "1"                # when behind Caddy/nginx/Cloudflare
+    volumes:
+      - haul-data:/data
+    restart: unless-stopped
+
+volumes:
+  haul-data:

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haul downloader</title>
+<meta name="description" content="Paste a link, pick the quality, and save video or audio. Powered by yt-dlp.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="mark" href="./">haul<span>.</span></a>
+    <nav class="nav"><a href="#api">API</a><a href="api/docs">Docs</a></nav>
+  </div>
+
+  <h1>Save video and audio from a link.</h1>
+  <p class="lead">Paste a link from YouTube or 1,000+ other sites, pick the quality and audio track, and download.</p>
+
+  <form class="paste" id="form">
+    <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://…" aria-label="Link" required>
+    <button class="btn" id="fetch" type="submit">Get</button>
+  </form>
+  <div class="hint" id="hint"></div>
+
+  <div class="card hidden" id="keycard">
+    <div class="label" style="margin-bottom:8px">API key</div>
+    <p style="margin:0 0 10px;color:var(--mid);font-size:14px">This server needs a key. It's saved in this browser only.</p>
+    <form class="paste" id="keyform"><input id="key" type="password" placeholder="Key" aria-label="API key"><button class="btn small" type="submit">Save</button></form>
+  </div>
+
+  <!-- One video -->
+  <div class="card hidden" id="mediacard">
+    <div class="media">
+      <img id="thumb" alt="">
+      <div>
+        <h2 id="title"></h2>
+        <div class="meta" id="meta"></div>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-video" aria-selected="true">Video</button>
+      <button type="button" role="tab" id="tab-audio" aria-selected="false">Audio</button>
+    </div>
+
+    <div class="opts">
+      <label id="lang-wrap" class="hidden">Audio language<select id="lang"></select></label>
+      <label id="container-wrap">File type<select id="container"><option value="mp4">MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option></select></label>
+      <label id="bitrate-wrap" class="hidden">MP3 quality<select id="bitrate"><option value="128">128k</option><option value="192" selected>192k</option><option value="256">256k</option><option value="320">320k</option></select></label>
+      <label id="cover-wrap" class="check hidden"><input type="checkbox" id="cover" checked> Cover art</label>
+    </div>
+
+    <div class="rows" id="rows" role="radiogroup"></div>
+    <button class="btn go" id="go" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <span>Download</span>
+    </button>
+  </div>
+
+  <!-- Playlist -->
+  <div class="card hidden" id="listcard">
+    <div class="label" id="listmeta" style="margin-bottom:6px"></div>
+    <h2 id="listtitle" style="margin:0 0 8px;font-size:18px"></h2>
+    <div class="list" id="entries"></div>
+  </div>
+
+  <!-- Downloads -->
+  <div class="card hidden" id="jobscard">
+    <div class="label" style="margin-bottom:8px">Downloads</div>
+    <div id="jobs"></div>
+  </div>
+
+  <div class="card" id="api">
+    <div class="label" style="margin-bottom:8px">API</div>
+    <p style="margin:0;color:var(--mid);font-size:14px;line-height:21px">Everything on this page uses a public REST API you can call from apps, scripts and browser extensions. Full reference at <a href="api/docs">/api/docs</a>.</p>
+<pre># 1. Formats for a link
+curl -X POST <span class="origin"></span>/api/info -H 'Content-Type: application/json' \
+  -d '{"url":"https://youtu.be/…"}'
+
+# 2. Start a download (video 1080p MP4, or "kind":"audio","audio_format":"mp3")
+curl -X POST <span class="origin"></span>/api/jobs -H 'Content-Type: application/json' \
+  -d '{"url":"https://youtu.be/…","kind":"video","height":1080}'
+
+# 3. Progress, then the file
+curl <span class="origin"></span>/api/jobs/JOB_ID
+curl -OJ <span class="origin"></span>/api/jobs/JOB_ID/file</pre>
+  </div>
+
+  <footer>
+    Download only content you own, content in the public domain, or content you have permission to save.
+    You're responsible for respecting copyright and each site's terms. Files are deleted from the server after <span id="ttl">an hour</span>.
+    <br><br><span id="versions"></span>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

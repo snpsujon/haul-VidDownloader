@@ -1,0 +1,85 @@
+:root{
+  --ground:#141311;--s1:#1C1B18;--s2:#252420;--line:#3A3832;--divider:#2A2925;
+  --hi:#F3EFE6;--mid:#B5AFA2;--low:#9A9488;--signal:#FF7A3D;--on-signal:#1A0E06;--ok:#A9D68C;--bad:#FF8A80;
+}
+@media (prefers-color-scheme: light){
+  :root{--ground:#F4F1EA;--s1:#FFFFFF;--s2:#EAE6DC;--line:#D6D0C3;--divider:#E2DDD2;
+    --hi:#1A1915;--mid:#57534A;--low:#6E695E;--signal:#C2440F;--on-signal:#FFFFFF;--ok:#3F7A22;--bad:#B3261E}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--hi);font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:var(--signal)}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:720px;margin:0 auto;padding:32px 16px 64px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.mark{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;letter-spacing:-.045em;line-height:.9;font-size:56px;text-decoration:none;color:var(--hi)}
+.mark span{color:var(--signal)}
+.label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;color:var(--low);text-transform:uppercase}
+.nav a{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;margin-left:14px}
+h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:clamp(30px,6vw,44px);line-height:1.08;letter-spacing:-.02em;margin:32px 0 10px}
+p.lead{font-size:17px;line-height:26px;color:var(--mid);margin:0 0 24px;max-width:560px}
+
+.paste{display:flex;gap:8px}
+.paste input{flex:1;min-width:0;height:56px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--s1);font-size:16px;outline:none}
+.paste input:focus{border-color:var(--signal)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;height:56px;padding:0 22px;border-radius:12px;background:var(--signal);color:var(--on-signal);font-weight:600;font-size:16px;text-decoration:none;border:0;cursor:pointer;white-space:nowrap}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn.ghost{background:transparent;color:var(--hi);border:1px solid var(--line)}
+.btn.small{height:40px;padding:0 14px;font-size:14px;border-radius:10px}
+.btn svg{width:20px;height:20px}
+.hint{font-size:13px;color:var(--low);margin-top:10px;min-height:18px}
+.hint.bad{color:var(--bad)}
+
+.card{background:var(--s1);border:1px solid var(--divider);border-radius:12px;padding:16px;margin-top:20px}
+.media{display:flex;gap:14px}
+.media img{width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--s2);flex:none}
+.media h2{font-size:18px;line-height:24px;margin:0 0 6px;word-break:break-word}
+.media .meta{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low)}
+@media (max-width:520px){.media{flex-direction:column}.media img{width:100%}}
+
+.tabs{display:flex;gap:4px;background:var(--s2);border-radius:10px;padding:4px;margin:16px 0 12px}
+.tabs button{flex:1;height:40px;border:0;border-radius:8px;background:transparent;cursor:pointer;font-weight:600;color:var(--mid)}
+.tabs button[aria-selected=true]{background:var(--s1);color:var(--hi)}
+
+.opts{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.opts label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mid)}
+.opts select{height:40px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--s1);min-width:120px}
+.check{flex-direction:row!important;align-items:center;align-self:flex-end;height:40px}
+.check input{width:18px;height:18px;accent-color:var(--signal)}
+
+.rows{display:flex;flex-direction:column;border:1px solid var(--divider);border-radius:10px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--divider);cursor:pointer;background:var(--s1)}
+.row:first-child{border-top:0}
+.row input{accent-color:var(--signal);width:18px;height:18px;margin:0}
+.row .name{font-weight:600;min-width:150px;white-space:nowrap}
+.row .spec{flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low);text-transform:uppercase}
+.row .size{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mid)}
+@media (max-width:520px){.row{flex-wrap:wrap;row-gap:4px}.row .name{flex:1;min-width:0}.row .spec{order:3;flex-basis:100%;padding-left:30px}}
+.row:has(input:checked){background:var(--s2)}
+.badge{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--signal);border:1px solid var(--signal);border-radius:4px;padding:1px 5px;margin-left:6px}
+.go{margin-top:14px;width:100%}
+
+.list{display:flex;flex-direction:column;gap:10px}
+.entry{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--divider)}
+.entry:first-child{border-top:0}
+.entry .t{flex:1;min-width:0}
+.entry .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.entry .t span{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low)}
+
+.job{padding:14px 0;border-top:1px solid var(--divider)}
+.job:first-child{border-top:0;padding-top:4px}
+.job .head{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.job .head b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.job .status{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--low);white-space:nowrap}
+.job .status.ok{color:var(--ok)}.job .status.bad{color:var(--bad)}
+.bar{height:6px;border-radius:3px;background:var(--s2);margin:10px 0;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--signal);width:0;transition:width .3s}
+.bar.busy i{width:30%!important;animation:busy 1.2s ease-in-out infinite}
+@keyframes busy{0%{margin-left:-30%}100%{margin-left:100%}}
+.job .actions{display:flex;gap:8px;flex-wrap:wrap}
+.job .err{color:var(--bad);font-size:14px;margin:8px 0 0}
+
+pre{background:var(--s2);border-radius:8px;padding:12px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:18px;margin:8px 0 0}
+code{font-family:'JetBrains Mono',monospace;font-size:13px}
+.hidden{display:none!important}
+footer{margin-top:40px;font-size:13px;line-height:19px;color:var(--low)}

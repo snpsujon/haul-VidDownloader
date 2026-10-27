@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Haul</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" width="22" height="22" alt="">
+    <strong>Haul</strong>
+    <a id="settings" href="#" title="Settings" aria-label="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </a>
+  </header>
+
+  <section class="page">
+    <div id="pageTitle" class="title">…</div>
+    <div id="pageHost" class="muted small"></div>
+  </section>
+
+  <div id="noPage" class="empty" hidden>
+    Open a video page first, then click Haul again.
+  </div>
+
+  <main id="main">
+    <div class="seg" role="tablist">
+      <button role="tab" data-tab="phone" aria-selected="true">To phone</button>
+      <button role="tab" data-tab="pc" aria-selected="false">On this PC</button>
+    </div>
+
+    <!-- Send to phone -->
+    <section id="phone" class="panel">
+      <div class="qr"><canvas id="qr"></canvas></div>
+      <p id="qrHint" class="hint"></p>
+      <div class="row">
+        <button id="copy" class="btn small">Copy link</button>
+        <button id="switchMode" class="btn small"></button>
+      </div>
+    </section>
+
+    <!-- Download on this PC -->
+    <section id="pc" class="panel" hidden>
+      <div id="pcChecking" class="muted">Looking for the Haul helper…</div>
+
+      <div id="pcMissing" hidden>
+        <p><strong>Set up desktop downloads once.</strong><br>
+          <span class="muted">Saving on this PC needs the small Haul helper app. It takes about a minute.</span></p>
+        <button id="setup" class="btn primary block">Show me how</button>
+      </div>
+
+      <div id="pcReady" hidden>
+        <div class="seg mode">
+          <button data-mode="video" aria-selected="true">Video</button>
+          <button data-mode="audio" aria-selected="false">Audio</button>
+        </div>
+        <div class="row">
+          <select id="quality" aria-label="Video quality">
+            <option value="best">Best available</option>
+            <option value="2160">Up to 4K</option>
+            <option value="1440">Up to 1440p</option>
+            <option value="1080">Up to 1080p</option>
+            <option value="720">Up to 720p</option>
+            <option value="480">Up to 480p</option>
+          </select>
+          <select id="audioFormat" aria-label="Audio format" hidden>
+            <option value="mp3">MP3</option>
+            <option value="m4a">M4A</option>
+            <option value="opus">Opus</option>
+          </select>
+          <button id="download" class="btn primary">Download</button>
+        </div>
+        <div id="pcError" class="error small" hidden></div>
+      </div>
+
+      <ul id="jobs"></ul>
+      <div class="row end" id="jobsActions" hidden>
+        <button id="openFolder" class="btn small">Open folder</button>
+        <button id="clear" class="btn small">Clear finished</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="lib/qrcode.js"></script>
+  <script src="common.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
