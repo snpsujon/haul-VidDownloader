@@ -10,3 +10,4 @@ build/
 *.jks
 *.keystore
 keystore.properties
+/Haul-debug.apk
