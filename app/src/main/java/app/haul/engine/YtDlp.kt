@@ -130,6 +130,7 @@ class YtDlp(private val context: Context, private val accounts: Accounts) {
         req.addOption("-f", item.formatSelector)
         req.addOption("--embed-metadata")
         addJsRuntime(req)
+        TrimRange.decode(item.trim)?.let { req.addCommands(Trim.ytDlpArgs(it)) }
 
         when (item.mediaType) {
             MediaType.VIDEO -> {
@@ -200,6 +201,34 @@ class YtDlp(private val context: Context, private val accounts: Accounts) {
         } finally {
             cookies?.delete()
         }
+    }
+
+    /**
+     * Cuts [range] out of [input] into [output] with the bundled FFmpeg. Returns true for exact cuts,
+     * false if only a stream copy worked (cuts at the nearest keyframe).
+     */
+    suspend fun trimFile(input: File, output: File, range: TrimRange, audio: Boolean): Boolean = withContext(Dispatchers.IO) {
+        if (!ensureReady()) throw EngineException("The download engine could not start.", "")
+        val attempts = Trim.ffmpegAttempts(input.absolutePath, output.absolutePath, range, audio)
+        var log = ""
+        attempts.forEachIndexed { i, args ->
+            output.delete()
+            val (code, text) = runFfmpeg(args)
+            if (code == 0 && output.length() > 0) return@withContext i < attempts.lastIndex
+            log = text
+        }
+        output.delete()
+        throw EngineException("FFmpeg couldn't cut this file.", log.takeLast(4000))
+    }
+
+    private fun runFfmpeg(args: List<String>): Pair<Int, String> {
+        val bin = File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so")
+        val packages = File(File(context.noBackupFilesDir, YoutubeDL.baseName), "packages")
+        val pb = ProcessBuilder(listOf(bin.absolutePath) + args).redirectErrorStream(true)
+        pb.environment()["LD_LIBRARY_PATH"] = listOf("python", "ffmpeg").joinToString(":") { File(packages, "$it/usr/lib").absolutePath }
+        val p = pb.start()
+        val text = p.inputStream.bufferedReader().readText()
+        return p.waitFor() to text
     }
 
     /** Updates yt-dlp from its own GitHub releases. Returns the new version or null if already current. */

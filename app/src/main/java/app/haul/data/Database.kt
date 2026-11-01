@@ -64,6 +64,8 @@ data class DownloadEntity(
     /** Subtitle language code to fetch, empty for none; mode is a SubtitleMode name. */
     @ColumnInfo(defaultValue = "") val subtitleLang: String = "",
     @ColumnInfo(defaultValue = "") val subtitleMode: String = "",
+    /** Part of the source to keep, as TrimRange.encode() ("30-105"); empty for all of it. */
+    @ColumnInfo(defaultValue = "") val trim: String = "",
 
     // progress
     val status: Status = Status.QUEUED,
@@ -179,9 +181,9 @@ interface DownloadDao {
 
 @Database(
     entities = [DownloadEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 @TypeConverters(Converters::class)
 abstract class HaulDatabase : RoomDatabase() {

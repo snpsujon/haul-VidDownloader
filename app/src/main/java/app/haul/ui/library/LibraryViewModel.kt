@@ -13,6 +13,8 @@ import app.haul.data.DownloadEntity
 import app.haul.data.MediaType
 import app.haul.data.SavedFile
 import app.haul.data.Status
+import app.haul.engine.Trim
+import app.haul.engine.TrimRange
 import app.haul.util.Pretty
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +23,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.webkit.MimeTypeMap
+import java.io.File
 import java.util.Calendar
 
 enum class LibrarySort(val label: String) {
@@ -42,6 +46,9 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     var actionsFor by mutableStateOf<DownloadEntity?>(null)
     var renaming by mutableStateOf<DownloadEntity?>(null)
     var deleting by mutableStateOf<DownloadEntity?>(null)
+    var trimming by mutableStateOf<DownloadEntity?>(null)
+    var trimBusy by mutableStateOf(false)
+        private set
     var importing by mutableStateOf(false)
         private set
 
@@ -93,6 +100,43 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         val r = g.storage.rename(item, name)
         if (r != null) g.dao.update(item.copy(fileUri = r.first, fileName = r.second, title = name.trim()))
         onDone(r != null)
+    }
+
+    /** Cuts [range] out of a saved file into "<name> (trim).ext", saved next to it and added to the Library. */
+    fun trim(item: DownloadEntity, range: TrimRange, onDone: (String) -> Unit) {
+        if (trimBusy) return
+        trimBusy = true
+        viewModelScope.launch {
+            val dir = File(getApplication<Application>().cacheDir, "trim/${item.id}")
+            val msg = runCatching {
+                val name = item.fileName ?: "${item.title}.${MimeTypeMap.getSingleton().getExtensionFromMimeType(item.mimeType) ?: "mp4"}"
+                val output = File(dir, Trim.trimmedName(name))
+                val exact = withContext(Dispatchers.IO) {
+                    dir.deleteRecursively()
+                    dir.mkdirs()
+                    val input = File(dir, "source.${name.substringAfterLast('.', "bin")}")
+                    val uri = g.storage.shareUri(item) ?: error("missing")
+                    getApplication<Application>().contentResolver.openInputStream(uri)?.use { src ->
+                        input.outputStream().use { src.copyTo(it, 1 shl 16) }
+                    } ?: error("unreadable")
+                    g.engine.trimFile(input, output, range, item.mediaType == MediaType.AUDIO).also { input.delete() }
+                }
+                val saved = g.storage.save(output, g.settings.current())
+                val now = System.currentTimeMillis()
+                g.dao.insert(
+                    item.copy(
+                        id = 0, title = "${item.title.ifBlank { name.substringBeforeLast('.') }} (trim)", durationSec = range.lengthSec,
+                        fileUri = saved.uri, fileName = saved.name, fileSize = saved.size, mimeType = saved.mime,
+                        folderLabel = saved.folderLabel, trim = range.encode(), createdAt = now, finishedAt = now,
+                    ),
+                )
+                if (exact) "Saved ${saved.name}." else "Saved ${saved.name}. The cuts are at the nearest keyframe."
+            }.getOrElse { "Couldn't trim this file. Check that it's still on your phone." }
+            withContext(Dispatchers.IO) { dir.deleteRecursively() }
+            trimBusy = false
+            trimming = null
+            onDone(msg)
+        }
     }
 
     /** Adds media already in Download/Haul (from an earlier install) to the Library. */

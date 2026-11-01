@@ -38,6 +38,7 @@ import app.haul.data.ErrorKind
 import app.haul.data.MediaType
 import app.haul.data.Status
 import app.haul.engine.Errors
+import app.haul.engine.TrimRange
 import app.haul.ui.components.AudioTile
 import app.haul.ui.components.ButtonKind
 import app.haul.ui.components.Divider
@@ -155,6 +156,7 @@ private fun TitleAndTags(item: DownloadEntity, modifier: Modifier = Modifier) {
             val (t, k) = typeTag(item)
             Tag(t, k)
             if (item.formatLabel.isNotBlank()) Tag(item.formatLabel, TagKind.Neutral)
+            TrimRange.decode(item.trim)?.let { Tag("TRIM ${it.label}", TagKind.Neutral) }
         }
     }
 }

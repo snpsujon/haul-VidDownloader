@@ -92,6 +92,7 @@ class DownloadQueue(
                 codecs = req.codecs,
                 subtitleLang = req.subtitleLang,
                 subtitleMode = if (req.subtitleLang.isEmpty()) "" else req.subtitleMode.name,
+                trim = req.trim?.encode().orEmpty(),
                 status = Status.QUEUED,
                 position = pos,
             )

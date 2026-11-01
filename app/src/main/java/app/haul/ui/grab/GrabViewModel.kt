@@ -19,6 +19,8 @@ import app.haul.engine.Fmt
 import app.haul.engine.FormatOptions
 import app.haul.engine.MediaInfo
 import app.haul.engine.SubtitleTrack
+import app.haul.engine.Trim
+import app.haul.engine.TrimRange
 import app.haul.data.SubtitleMode
 import app.haul.engine.VideoChoice
 import app.haul.util.Links
@@ -72,6 +74,9 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
     /** Picked subtitle track code, null for off. */
     var subtitleCode by mutableStateOf<String?>(null)
     var subtitleMode by mutableStateOf(SubtitleMode.EMBED)
+    var trimOn by mutableStateOf(false)
+    var trimStart by mutableStateOf("")
+    var trimEnd by mutableStateOf("")
 
     // All formats
     var allFilter by mutableStateOf(0)
@@ -182,6 +187,9 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
         subtitleTracks = info.subtitles
         subtitleCode = FormatOptions.defaultSubtitle(info.subtitles, s.subtitleLang)?.code
         subtitleMode = s.subtitleMode
+        trimOn = false
+        trimStart = Trim.format(0)
+        trimEnd = if (info.durationSec > 0) Trim.format(info.durationSec) else ""
         metaTitle = info.title
         metaArtist = info.uploader
         tab = if (info.hasVideo && videoChoices.isNotEmpty()) MediaType.VIDEO else MediaType.AUDIO
@@ -211,6 +219,13 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
         if (audioChoices.none { it.format == audioFormat }) audioFormat = AudioFormat.MP3
     }
 
+    /** The part to keep; null when Trim is off or the times aren't valid yet. */
+    val trimRange: TrimRange? get() = if (trimOn) Trim.range(trimStart, trimEnd, info?.durationSec ?: 0) else null
+    val trimInvalid: Boolean get() = trimOn && trimRange == null
+
+    /** A size for the whole file, cut down to the trimmed part. */
+    fun trimmed(bytes: Long?): Long? = Trim.scaledBytes(bytes, info?.durationSec ?: 0, trimRange)
+
     val selectedVideo: VideoChoice? get() = videoChoices.firstOrNull { it.height == selectedHeight }
     val selectedAudio: AudioChoice? get() = audioChoices.firstOrNull { it.format == audioFormat }
 
@@ -220,6 +235,7 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
     /** The Download button in the format sheet. */
     fun download(onQueued: () -> Unit) {
         val i = info ?: return
+        if (trimInvalid) return
         val req = when (tab) {
             MediaType.VIDEO -> selectedVideo?.let { v ->
                 FormatOptions.videoRequest(v).let { r -> subtitleCode?.let { r.copy(subtitleLang = it, subtitleMode = subtitleMode) } ?: r }
@@ -232,7 +248,7 @@ class GrabViewModel(app: Application) : AndroidViewModel(app) {
                     audioSize(it),
                 )
             }
-        } ?: return
+        }?.let { r -> trimRange?.let { t -> r.copy(trim = t, estimatedBytes = trimmed(r.estimatedBytes) ?: 0) } ?: r } ?: return
         viewModelScope.launch {
             g.queue.enqueue(i, i.url, req)
             sheetOpen = false

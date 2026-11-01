@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import app.haul.HaulApp
 import app.haul.data.DownloadEntity
 import app.haul.data.MediaType
+import app.haul.engine.Trim
+import app.haul.ui.grab.TrimEditor
 import app.haul.ui.components.AudioTile
 import app.haul.ui.components.ButtonKind
 import app.haul.ui.components.Divider
@@ -126,6 +128,7 @@ fun ItemActionsSheet(
             }
             Action(HaulIcon.Queue, "Save in another format") { close(); onRegrab(item.url) }
         }
+        Action(HaulIcon.Trim, "Trim…") { close(); vm.trimming = item }
         Action(HaulIcon.Rename, "Rename") { close(); vm.renaming = item }
         Action(HaulIcon.Delete, "Delete file", hint = "ASKS FIRST", color = c.err) { close(); vm.deleting = item }
     }
@@ -152,6 +155,43 @@ private fun Action(
         HIcon(icon, color, size = 22.dp, filled = filled)
         T(label, sans(15.sp, FontWeight.Medium), color, Modifier.weight(1f))
         if (hint.isNotEmpty()) T(hint, mono(11.sp), Haul.colors.textLow, maxLines = 1)
+    }
+}
+
+/** Trim for a saved file: makes a trimmed copy with the bundled FFmpeg. */
+@Composable
+fun TrimSheet(vm: LibraryViewModel, snack: SnackState) {
+    val c = Haul.colors
+    var last by remember { mutableStateOf<DownloadEntity?>(null) }
+    vm.trimming?.let { last = it }
+    val item = last
+    HaulSheet(vm.trimming != null, { if (!vm.trimBusy) vm.trimming = null }) {
+        if (item == null) return@HaulSheet
+        var start by remember(item.id) { mutableStateOf(Trim.format(0)) }
+        var end by remember(item.id) { mutableStateOf(if (item.durationSec > 0) Trim.format(item.durationSec) else "") }
+        val range = Trim.range(start, end, item.durationSec)
+        Spacer(Modifier.height(16.dp))
+        T("Trim", Haul.type.headline, c.textHi)
+        Spacer(Modifier.height(6.dp))
+        T(
+            "Saves the part you pick as a new file next to the original, which stays as it is.",
+            sans(13.sp, lineHeight = 18.sp), c.textLow,
+        )
+        Spacer(Modifier.height(16.dp))
+        TrimEditor(start, end, item.durationSec, onStart = { start = it }, onEnd = { end = it })
+        Spacer(Modifier.height(20.dp))
+        HButton(
+            when {
+                vm.trimBusy -> "Trimming…"
+                range != null -> "Save trimmed copy · ${Trim.format(range.lengthSec)}"
+                else -> "Save trimmed copy"
+            },
+            { range?.let { r -> vm.trim(item, r) { snack.show(it) } } },
+            Modifier.fillMaxWidth(),
+            enabled = range != null && !vm.trimBusy,
+            icon = HaulIcon.Trim,
+        )
+        Spacer(Modifier.height(8.dp))
     }
 }
 

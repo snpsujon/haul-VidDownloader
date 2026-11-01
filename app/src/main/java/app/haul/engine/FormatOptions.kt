@@ -46,6 +46,7 @@ data class DownloadRequest(
     val codecs: String? = null,
     val subtitleLang: String = "",       // yt-dlp language code; empty for none
     val subtitleMode: SubtitleMode = SubtitleMode.EMBED,
+    val trim: TrimRange? = null,
 )
 
 object FormatOptions {

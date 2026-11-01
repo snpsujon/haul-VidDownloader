@@ -55,6 +55,7 @@ import app.haul.ui.library.ItemActionsSheet
 import app.haul.ui.library.LibraryScreen
 import app.haul.ui.library.LibraryViewModel
 import app.haul.ui.library.RenameDialog
+import app.haul.ui.library.TrimSheet
 import app.haul.ui.library.showMissing
 import app.haul.ui.onboarding.OnboardingScreen
 import app.haul.ui.onboarding.PermissionsScreen
@@ -359,6 +360,7 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
         )
         ItemActionsSheet(library, snack, onPlay = ::openItem, onRegrab = { regrab(it) })
         RenameDialog(library, snack)
+        TrimSheet(library, snack)
         DeleteDialog(library, snack)
         UpdatePromptSheet(
             info,

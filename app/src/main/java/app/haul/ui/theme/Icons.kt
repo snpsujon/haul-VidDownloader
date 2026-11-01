@@ -54,6 +54,7 @@ enum class HaulIcon(val d: String, val viewport: Float = 24f) {
     External("M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"),
     Copy("M9 9h11v11H9zM5 15H4V4h11v1"),
     Rename("M4 20h4l11-11-4-4L4 16zM13.5 6.5l4 4"),
+    Trim("M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.2 7.8L20 19.5M8.2 16.2L20 4.5"),
     Sort("M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3"),
     Reorder("M5 9h14M5 15h14"),
     Fullscreen("M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"),

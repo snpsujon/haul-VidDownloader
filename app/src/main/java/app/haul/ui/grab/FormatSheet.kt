@@ -29,6 +29,7 @@ import app.haul.data.AudioFormat
 import app.haul.data.MediaType
 import app.haul.data.SubtitleMode
 import app.haul.engine.MediaInfo
+import app.haul.engine.Trim
 import app.haul.ui.components.ChoiceRow
 import app.haul.ui.components.Divider
 import app.haul.ui.components.FilterChip
@@ -75,6 +76,7 @@ fun FormatSheet(
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (vm.audioTracks.isNotEmpty()) AudioLanguage(vm)
             if (vm.tab == MediaType.VIDEO && hasVideo) VideoTab(vm, onAllFormats) else AudioTab(vm)
+            TrimSection(vm)
         }
         Spacer(Modifier.height(12.dp))
         if (vm.tab == MediaType.VIDEO && hasVideo) {
@@ -88,19 +90,20 @@ fun FormatSheet(
                 T(saveLabel, mono(12.sp), c.textMid)
             }
         }
+        val trim = vm.trimRange?.let { " · TRIM ${Trim.format(it.lengthSec)}" }.orEmpty()
         val label = if (vm.tab == MediaType.VIDEO && hasVideo) {
-            vm.selectedVideo?.let { "Download · ${it.height}p ${it.container.uppercase()} · ${Pretty.bytes(it.sizeBytes)}" }
+            vm.selectedVideo?.let { "Download · ${it.height}p ${it.container.uppercase()}$trim · ${Pretty.bytes(vm.trimmed(it.sizeBytes))}" }
         } else {
             vm.selectedAudio?.let { a ->
                 val name = if (a.format == AudioFormat.MP3) "MP3 ${vm.mp3Bitrate}" else a.format.label.uppercase()
-                "Download · $name · ${Pretty.bytes(vm.audioSize(a))}"
+                "Download · $name$trim · ${Pretty.bytes(vm.trimmed(vm.audioSize(a)))}"
             }
         }
         HButton(
             label?.replace(" · —", "") ?: "Download",
             { vm.download(onQueued) },
             Modifier.fillMaxWidth(),
-            enabled = label != null,
+            enabled = label != null && !vm.trimInvalid,
             icon = HaulIcon.Queue,
         )
     }
@@ -118,6 +121,30 @@ fun MediaHeader(info: MediaInfo, onClose: (() -> Unit)?) {
         if (onClose != null) {
             IconButton44(HaulIcon.Close, "Close", onClose, Modifier.offset(x = 12.dp, y = (-10).dp), color = c.textMid, iconSize = 20.dp)
         }
+    }
+}
+
+/** Keep only part of the video or song. Off by default; applies to both tabs. */
+@Composable
+private fun TrimSection(vm: GrabViewModel) {
+    val c = Haul.colors
+    Spacer(Modifier.height(18.dp))
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(role = Role.Switch) { vm.trimOn = !vm.trimOn },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            SectionLabel("Trim")
+            if (!vm.trimOn) T("Save only part of it", sans(13.sp), c.textLow)
+        }
+        HSwitch(vm.trimOn)
+    }
+    if (vm.trimOn) {
+        Spacer(Modifier.height(10.dp))
+        TrimEditor(
+            vm.trimStart, vm.trimEnd, vm.info?.durationSec ?: 0,
+            onStart = { vm.trimStart = it }, onEnd = { vm.trimEnd = it },
+        )
     }
 }
 
