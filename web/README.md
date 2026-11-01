@@ -94,6 +94,14 @@ All on the admin page, saved in `$HAUL_DATA_DIR/settings.json` (no restart neede
   downloading; "Download backup" gives a zip of the data folder's settings, log, pairings, cookies
   and releases list (optionally the release files).
 
+## App notifications
+
+The admin page's "App notifications" sends news to the Android app, which polls for it (no
+Firebase): `GET /api/notices?since=<last id>&v=<versionCode>` gives `{"ok", "items": [{"id",
+"title", "body", "url", "min_version", "max_version", "created_at"}]}`, oldest first, at most 20,
+already filtered for that version (0 = no limit). `since=0` (a new install) gets only the newest
+notice from the last 7 days. Deleted notices stop being served.
+
 ## App, extension and helper downloads
 
 The admin page has an upload card for the Android app (one or more APKs plus version and

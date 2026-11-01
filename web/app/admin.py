@@ -398,3 +398,42 @@ def _make_backup(with_releases: bool):
                    "(HAUL_DATA_DIR, ./data by default), then start it again.\n"
                    "cookies.txt signs in to YouTube, so keep this file private.\n")
     return out
+
+
+# App notifications ---------------------------------------------------------------------------
+
+class Notice(BaseModel):
+    title: str = Field(..., min_length=1, max_length=80)
+    body: str = Field(..., min_length=1, max_length=500)
+    url: str = Field("", max_length=500)
+    min_version: int = Field(0, ge=0, le=2_000_000_000)
+    max_version: int = Field(0, ge=0, le=2_000_000_000)
+
+
+def notice_public(n: dict) -> dict:
+    return {"id": n["id"], "title": n["title"], "body": n["body"], "url": n["url"] or None,
+            "min_version": n["min_version"], "max_version": n["max_version"],
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(n["created"]))}
+
+
+@router.get("/notices", dependencies=[Depends(require_admin)], summary="Notifications sent to the Android app")
+async def list_notices():
+    return {"notices": [notice_public(n) for n in store.all_notices()]}
+
+
+@router.post("/notices", dependencies=[Depends(require_admin)], summary="Send a notification to the Android app")
+async def send_notice(body: Notice):
+    url = body.url.strip()
+    if url and not url.startswith(("https://", "http://")):
+        raise HTTPException(400, "The link has to start with https://")
+    if body.max_version and body.min_version and body.max_version < body.min_version:
+        raise HTTPException(400, "The highest version is lower than the lowest one.")
+    n = store.add_notice(body.title.strip(), body.body.strip(), url or None, body.min_version, body.max_version)
+    return {"ok": True, "notice": notice_public(n)}
+
+
+@router.delete("/notices/{notice_id}", dependencies=[Depends(require_admin)], summary="Stop showing a notification")
+async def delete_notice(notice_id: int):
+    if not store.delete_notice(notice_id):
+        raise HTTPException(404, "No such notification.")
+    return {"ok": True}

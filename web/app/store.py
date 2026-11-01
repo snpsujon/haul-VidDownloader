@@ -238,3 +238,69 @@ def stats_report(days: int = 30) -> dict:
         daily.append({"day": day, **{k: by_day.get(day, {}).get(k, 0) for k in ("android", "extension", "helper")}})
     return {"days": days, "sites": sites, "countries": countries, "sources": sources, "kinds": kinds,
             "installs": {"daily": daily, "totals": totals, "detail": detail}}
+
+
+# Notices: news the admin sends to the Android app, which polls for them.
+
+_NOTICE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS notices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created REAL NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  url TEXT,
+  min_version INTEGER NOT NULL DEFAULT 0,
+  max_version INTEGER NOT NULL DEFAULT 0,
+  deleted INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
+def _notices() -> sqlite3.Connection | None:
+    if _conn is not None:
+        _conn.executescript(_NOTICE_SCHEMA)
+    return _conn
+
+
+def add_notice(title: str, body: str, url: str | None, min_version: int, max_version: int) -> dict:
+    with _lock:
+        c = _notices()
+        cur = c.execute("INSERT INTO notices (created, title, body, url, min_version, max_version) VALUES (?, ?, ?, ?, ?, ?)",
+                        (time.time(), title, body, url, min_version, max_version))
+        c.commit()
+        return dict(c.execute("SELECT * FROM notices WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def delete_notice(notice_id: int) -> bool:
+    with _lock:
+        c = _notices()
+        n = c.execute("UPDATE notices SET deleted = 1 WHERE id = ? AND deleted = 0", (notice_id,)).rowcount
+        c.commit()
+    return n > 0
+
+
+def all_notices(limit: int = 200) -> list[dict]:
+    if _conn is None:
+        return []
+    with _lock:
+        return [dict(r) for r in _notices().execute(
+            "SELECT * FROM notices WHERE deleted = 0 ORDER BY id DESC LIMIT ?", (limit,)).fetchall()]
+
+
+def notices_since(since: int, version: int | None, limit: int = 20) -> list[dict]:
+    """Live notices after since, oldest first, that suit the app's version code. since=0 (a new
+    install) gets only the newest one from the last 7 days, so new users don't get a backlog."""
+    if _conn is None:
+        return []
+    sql = "SELECT * FROM notices WHERE deleted = 0 AND id > ?"
+    args: list = [since]
+    if version:
+        sql += " AND (min_version = 0 OR min_version <= ?) AND (max_version = 0 OR max_version >= ?)"
+        args += [version, version]
+    with _lock:
+        c = _notices()
+        if since <= 0:
+            rows = c.execute(sql + " AND created > ? ORDER BY id DESC LIMIT 1", (*args, time.time() - 7 * 86400)).fetchall()
+        else:
+            rows = c.execute(sql + " ORDER BY id LIMIT ?", (*args, limit)).fetchall()
+    return [dict(r) for r in rows]

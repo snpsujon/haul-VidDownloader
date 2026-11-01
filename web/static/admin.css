@@ -222,3 +222,11 @@ p.empty{color:var(--low);font-size:14px;margin:0}
 .formgrid label.wide{grid-column:1/-1}
 .relform select{height:40px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--s1);color:var(--hi);font:inherit;font-size:14px;width:100%}
 .relform select:focus{outline:none;border-color:var(--signal)}
+
+/* App notifications: a phone-style preview */
+.npreview{display:flex;gap:12px;max-width:420px;padding:12px 14px;border-radius:16px;background:var(--s2, var(--s1));border:1px solid var(--divider)}
+.npreview .nicon{flex:none;width:28px;height:28px;border-radius:50%;background:var(--signal);color:var(--on-signal);display:grid;place-items:center;font-weight:700;font-size:14px}
+.npreview .nhead{display:flex;gap:8px;font-size:11px;color:var(--low);margin-bottom:2px}
+.npreview b{display:block;font-size:14px;word-break:break-word}
+.npreview p{margin:2px 0 0;font-size:13px;color:var(--mid);line-height:18px;white-space:pre-wrap;word-break:break-word}
+table.t td.title .nbody{display:block;color:var(--mid);font-size:13px;margin:2px 0;white-space:pre-wrap}

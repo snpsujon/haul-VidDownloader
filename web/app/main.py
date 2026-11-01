@@ -242,6 +242,16 @@ async def site_info():
     return settings.public()
 
 
+@app.get("/api/notices", tags=["server"], summary="News for the Android app, which checks every so often")
+async def notices(since: int = Query(0, ge=0, description="The highest id the app has seen; 0 on a new install"),
+                  v: int | None = Query(None, ge=0, description="The app's version code, to skip notices for other versions")):
+    from fastapi.responses import JSONResponse
+    from .admin import notice_public
+    items = [notice_public(n) for n in store.notices_since(since, v)]
+    return JSONResponse({"ok": True, "items": items},
+                        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"})
+
+
 @app.post("/api/info", tags=["media"], summary="Title, thumbnail and format choices for a link")
 async def info(body: InfoRequest, _: str = Depends(require_key)):
     data = await get_info(body.url, body.playlist)

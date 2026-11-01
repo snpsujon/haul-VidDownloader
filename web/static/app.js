@@ -514,8 +514,32 @@
   var where = store.get('where', 'pc');
   var PC_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
 
+  // Firefox has no chrome.runtime.sendMessage from web pages, so the Firefox add-on runs a small
+  // content script (bridge.js) on this site. It marks the page with data-haul-extension and
+  // passes window.postMessage requests on: {haul:'request', id, msg} -> {haul:'reply', id, reply}.
+  var BRIDGE = 'bridge', bridgeSeq = 0, bridgeWaiting = {};
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (e.source !== window || !d || typeof d !== 'object') return;
+    if (d.haul === 'reply' && bridgeWaiting[d.id]) { bridgeWaiting[d.id](d.reply); delete bridgeWaiting[d.id]; }
+    if (d.haul === 'ready' && !pc.id) detectPc([BRIDGE]);
+  });
+  function hasBridge() { return !!document.documentElement.getAttribute('data-haul-extension'); }
+  function bridgeCall(msg, timeout) {
+    return new Promise(function (resolve, reject) {
+      var id = 'h' + (++bridgeSeq) + '-' + Date.now();
+      var t = setTimeout(function () { delete bridgeWaiting[id]; reject(new Error("The Haul extension didn't answer.")); }, timeout || 3000);
+      bridgeWaiting[id] = function (r) {
+        clearTimeout(t);
+        if (!r) reject(new Error('No answer from the Haul extension.')); else resolve(r);
+      };
+      window.postMessage({ haul: 'request', id: id, msg: msg }, location.origin);
+    });
+  }
+
   function extCall(msg, timeout, id) {
     id = id || pc.id;
+    if (id === BRIDGE) return bridgeCall(msg, timeout);
     return new Promise(function (resolve, reject) {
       var rt = window.chrome && chrome.runtime;
       if (!rt || !rt.sendMessage || !id) return reject(new Error('The Haul extension is not installed.'));
@@ -532,6 +556,8 @@
   }
 
   function detectPc(ids) {
+    // The Firefox add-on first, when its bridge is on the page (or may still be loading).
+    if (ids[0] !== BRIDGE && (hasBridge() || !(window.chrome && chrome.runtime && chrome.runtime.sendMessage))) ids = [BRIDGE].concat(ids);
     var tryOne = function (i) {
       if (i >= ids.length) { renderWhere(); return; }
       extCall({ cmd: 'hello' }, 1500, ids[i]).then(function (r) {
@@ -756,7 +782,8 @@
       var works = ['Chrome', 'Edge', 'Brave', 'Opera'].concat(st.firefox || xpi ? ['Firefox'] : []).join(', ');
       cards.push('<div class="ghcard"><h3>Browser extension</h3><p class="sub">' + [ver(x.version), works].filter(Boolean).join(' · ') + '</p>' + notes(x.notes) +
         main + (how ? '<div class="alt">' + esc(how) + '</div>' : '') + (also.length ? '<div class="alt">Other ways: ' + also.join(' · ') + '</div>' : '') + '</div>');
-      if (mine || st.chrome) STORE_URL = mine || go.chrome || st.chrome;
+      // The "Get the Haul extension" link under the box: this browser's store, else its file, else this card.
+      STORE_URL = mine || (file ? file.url : me === 'firefox' ? '#gethaul' : go.chrome || st.chrome || STORE_URL);
     }
     if (h && (h.url || h.builds)) {
       helperUrl = 'helper';

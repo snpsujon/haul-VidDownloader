@@ -55,7 +55,7 @@
 
   // Pages: the sidebar picks one by the address's #hash ------------------------------------
 
-  var PAGES = ['dashboard', 'stats', 'jobs', 'log', 'app', 'extension', 'helper', 'files', 'site', 'blocking', 'alerts', 'cookies', 'server'];
+  var PAGES = ['dashboard', 'stats', 'jobs', 'log', 'app', 'notices', 'extension', 'helper', 'files', 'site', 'blocking', 'alerts', 'cookies', 'server'];
   function route() {
     var page = location.hash.slice(1);
     if (PAGES.indexOf(page) < 0) page = 'dashboard';
@@ -67,6 +67,7 @@
     });
     if (token) {
       if (page === 'stats') loadStats();
+      if (page === 'notices') loadNotices();
       if (page === 'site' || page === 'blocking' || page === 'alerts') loadSettings();
     }
     document.title = (document.querySelector('[data-nav="' + page + '"] span') || {}).textContent + ' · Haul admin';
@@ -866,6 +867,52 @@
         }, function (err) { hint(to, err.message, true); });
       }, function () { }).finally(function () { btn.disabled = false; });
     }
+  });
+
+  // App notifications ---------------------------------------------------------------------
+
+  var appCode = null;
+  function versions(n) {
+    if (!n.min_version && !n.max_version) return 'All';
+    if (n.min_version && n.max_version) return n.min_version === n.max_version ? 'Only ' + n.min_version : n.min_version + '–' + n.max_version;
+    return n.min_version ? n.min_version + ' and newer' : 'Up to ' + n.max_version;
+  }
+  function loadNotices() {
+    api('notices').then(function (r) {
+      $('ncount').textContent = r.notices.length ? r.notices.length + ' live' : '';
+      $('notices').tBodies[0].innerHTML = r.notices.map(function (n) {
+        return '<tr><td class="title"><b>' + esc(n.title) + '</b><span class="nbody">' + esc(n.body) + '</span>' +
+          (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.url) + '</a>' : '') + '</td>' +
+          '<td class="mono">' + esc(versions(n)) + '</td><td class="mono">' + esc(when(Date.parse(n.created_at) / 1000)) + '</td>' +
+          '<td><div class="rowacts"><button type="button" class="abtn danger" data-delnotice="' + n.id + '">Delete</button></div></td></tr>';
+      }).join('') || '<tr><td colspan="4" class="empty">Nothing sent yet.</td></tr>';
+    }).catch(function () { });
+    api('releases').then(function (r) {
+      var a = r.public.android;
+      appCode = a ? a.version_code : null;
+      $('nvhint').textContent = a ? 'The published app is version ' + a.version + ' (code ' + a.version_code + ').' : '';
+    }).catch(function () { });
+  }
+  function noticePreview() {
+    var f = $('f-notice');
+    $('nptitle').textContent = f.title.value.trim() || 'Title';
+    $('npbody').textContent = f.body.value.trim() || 'Message';
+    $('ntcount').textContent = f.title.value.length;
+    $('nbcount').textContent = f.body.value.length;
+  }
+  $('f-notice').addEventListener('input', noticePreview);
+  $('f-notice').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = this;
+    if (!confirm('Send "' + f.title.value.trim() + '" to every phone with the app? It can\'t be taken back from phones that already got it.')) return;
+    api('notices', { method: 'POST', body: { title: f.title.value, body: f.body.value, url: f.url.value,
+      min_version: parseInt(f.min_version.value, 10) || 0, max_version: parseInt(f.max_version.value, 10) || 0 } })
+      .then(function () { f.reset(); noticePreview(); hint('noticehint', '✓ Sent. Phones pick it up within about 15 minutes.'); loadNotices(); })
+      .catch(function (err) { hint('noticehint', err.message, true); });
+  });
+  $('notices').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-delnotice');
+    if (id && confirm('Delete this notification?')) api('notices/' + id, { method: 'DELETE' }).then(loadNotices).catch(function (err) { alert(err.message); });
   });
 
   // Sign in -------------------------------------------------------------------------------

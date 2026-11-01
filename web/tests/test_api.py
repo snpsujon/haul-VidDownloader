@@ -723,3 +723,35 @@ def test_smtp_settings_and_test_per_channel(client, monkeypatch):
     (config.DATA_DIR / "settings.json").write_text(json.dumps(raw))
     assert settings.load()["alerts"]["smtp_security"] == "ssl"
     client.put("/api/admin/settings/alerts", headers=h, json={"telegram_token": "", "smtp_password": "", "telegram_chat": "", "email_to": ""})
+
+
+def test_app_notices(client, monkeypatch):
+    h = admin_headers(client, monkeypatch)
+    from app import store
+    assert client.post("/api/admin/notices", json={"title": "x", "body": "y"}).status_code == 401
+    assert client.post("/api/admin/notices", headers=h, json={"title": "", "body": "y"}).status_code == 422
+    assert client.post("/api/admin/notices", headers=h, json={"title": "x", "body": "y", "url": "javascript:alert(1)"}).status_code == 400
+    assert client.post("/api/admin/notices", headers=h, json={"title": "x", "body": "y", "min_version": 5, "max_version": 2}).status_code == 400
+    first = client.post("/api/admin/notices", headers=h, json={"title": "gone", "body": "deleted"}).json()["notice"]["id"]
+    client.delete(f"/api/admin/notices/{first}", headers=h)  # so since below is never 0
+    ids = [client.post("/api/admin/notices", headers=h, json=n).json()["notice"]["id"] for n in (
+        {"title": "One", "body": "first"},
+        {"title": "Two", "body": "for old apps", "max_version": 100},
+        {"title": "Three", "body": "for new apps", "min_version": 200, "url": "https://example.com/x"},
+    )]
+    r = client.get(f"/api/notices?since={ids[0] - 1}")
+    assert r.headers["access-control-allow-origin"] == "*"
+    items = r.json()["items"]
+    assert [i["title"] for i in items] == ["One", "Two", "Three"] and items[2]["url"] == "https://example.com/x"
+    assert set(items[0]) == {"id", "title", "body", "url", "min_version", "max_version", "created_at"} and items[0]["created_at"].endswith("Z")
+    assert [i["title"] for i in client.get(f"/api/notices?since={ids[0] - 1}&v=150").json()["items"]] == ["One"]
+    assert [i["title"] for i in client.get(f"/api/notices?since={ids[0]}&v=250").json()["items"]] == ["Three"]
+    # A new install only gets the newest one from the last week.
+    assert [i["title"] for i in client.get("/api/notices?since=0").json()["items"]] == ["Three"]
+    assert [i["title"] for i in client.get("/api/notices?since=0&v=100").json()["items"]] == ["Two"]
+    assert client.delete(f"/api/admin/notices/{ids[2]}", headers=h).status_code == 200
+    assert client.delete(f"/api/admin/notices/{ids[2]}", headers=h).status_code == 404
+    assert [i["title"] for i in client.get(f"/api/notices?since={ids[0] - 1}").json()["items"]] == ["One", "Two"]
+    assert [n["title"] for n in client.get("/api/admin/notices", headers=h).json()["notices"]] == ["Two", "One"]
+    monkeypatch.setattr(store.time, "time", lambda real=time.time: real() + 8 * 86400)
+    assert client.get("/api/notices?since=0").json()["items"] == []
