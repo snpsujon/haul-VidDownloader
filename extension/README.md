@@ -26,6 +26,7 @@ More ways in:
 | `helper/haul-helper-mac` | The macOS helper (one file for Intel and Apple silicon). |
 | `helper/haul-helper-linux-x64`, `helper/haul-helper-linux-arm64` | The Linux helpers. |
 | `helper/install.sh` | The one-line installer for macOS and Linux. The website serves it at `/install.sh`. |
+| `firefox/` | The Firefox version of the extension (same features, Firefox-specific code). |
 | `helper-source/` | The helper's Go source. |
 
 ## Install the extension
@@ -76,6 +77,22 @@ The `chrome` folder's manifest has a `key`, which gives the unpacked copy a fixe
 ## Website bridge
 
 The Haul website (`stackforge-pro.xyz` and `www.stackforge-pro.xyz`, plus `localhost` / `127.0.0.1` on any port for development) can ask the extension to download on the visitor's PC through the helper. It uses `chrome.runtime.sendMessage(extensionId, msg)` and tries both IDs. Messages: `{cmd:'hello'}`, `{cmd:'download', url, mode, title?, quality?, audioFormat?}`, `{cmd:'jobs', ids?}`, `{cmd:'cancel', id}`, `{cmd:'reveal', id}`. The site only sees and controls the jobs it started, and never gets file paths (`hasFile` instead). To add another site, edit `externally_connectable` in `manifest.json` and `SITE_ORIGINS` in `background.js`.
+
+## Firefox
+
+The `firefox` folder is a copy of `chrome` adapted for Firefox 140 and later. The differences:
+
+- `manifest.json` has `browser_specific_settings.gecko` with the add-on ID `haul@stackforge-pro.xyz` and the data collection declaration Firefox requires. It uses a background page (`background.scripts`) instead of a service worker, `options_ui` instead of `options_page`, and has no `key` or `externally_connectable`.
+- The code uses Firefox's `browser.*` API instead of `chrome.*`.
+- Content scripts can't read session storage in Firefox, so the button on videos asks the background for its job's progress (`{cmd:'job', id}`) about once a second.
+- Firefox has no `externally_connectable`, so `bridge.js` runs on stackforge-pro.xyz and passes the site's messages on. The site posts `{haul:'request', id, msg}` with `window.postMessage`, and gets `{haul:'reply', id, reply}` back. `msg` is the same object it sends Chrome. On load the script posts `{haul:'ready', version}` and sets `data-haul-extension` on `<html>`.
+- The shortcut settings open with `commands.openShortcutSettings()`.
+
+The helper (0.5.0 and later) registers itself for Firefox too: `HKCU\Software\Mozilla\NativeMessagingHosts` on Windows, `~/Library/Application Support/Mozilla/NativeMessagingHosts` on macOS and `~/.mozilla/native-messaging-hosts` on Linux, with a manifest that lists the add-on ID under `allowed_extensions`. Firefox starts the helper with the manifest path and the add-on ID as arguments.
+
+To try it: open `about:debugging`, choose *This Firefox*, then *Load Temporary Add-on…* and pick `firefox/manifest.json`. To publish: zip the contents of the `firefox` folder (the manifest at the root of the zip) and upload it at addons.mozilla.org/developers. `npx web-ext lint -s firefox` runs Mozilla's checks first.
+
+When you change something in `chrome`, make the same change in `firefox` (with `browser.` instead of `chrome.`).
 
 ## Publishing to the Chrome Web Store
 

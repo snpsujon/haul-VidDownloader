@@ -35,24 +35,21 @@ func install() error {
 		}
 	}
 
-	// 2. Tell the browsers about it.
-	step("Connecting to Chrome, Edge, Brave and Chromium")
+	// 2. Tell the browsers about it. Chromium browsers and Firefox read different manifests.
+	step("Connecting to Chrome, Edge, Brave, Chromium and Firefox")
 	manifest := filepath.Join(baseDir(), hostName+".json")
 	origins := []string{}
 	for _, id := range extensionIDs {
 		origins = append(origins, "chrome-extension://"+id+"/")
 	}
-	body, _ := json.MarshalIndent(map[string]any{
-		"name":            hostName,
-		"description":     "Haul desktop helper",
-		"path":            target,
-		"type":            "stdio",
-		"allowed_origins": origins,
-	}, "", "  ")
-	if err := os.WriteFile(manifest, body, 0o644); err != nil {
+	if err := writeHostManifest(manifest, target, "allowed_origins", origins); err != nil {
 		return err
 	}
-	if err := registerHost(manifest); err != nil {
+	ffManifest := filepath.Join(baseDir(), hostName+".firefox.json")
+	if err := writeHostManifest(ffManifest, target, "allowed_extensions", firefoxIDs); err != nil {
+		return err
+	}
+	if err := registerHost(manifest, ffManifest); err != nil {
 		return err
 	}
 
@@ -88,6 +85,7 @@ func uninstall() error {
 	step("Removing yt-dlp and FFmpeg")
 	os.RemoveAll(binDir())
 	os.Remove(filepath.Join(baseDir(), hostName+".json"))
+	os.Remove(filepath.Join(baseDir(), hostName+".firefox.json"))
 	fmt.Println()
 	fmt.Println("Done. You can delete", baseDir(), "once this window is closed.")
 	return nil
@@ -95,6 +93,19 @@ func uninstall() error {
 
 // installFFmpeg downloads each archive in ffmpegArchives and keeps ffmpeg and ffprobe from them.
 // Windows gets both in one zip, macOS gets one zip each, Linux gets a .tar.xz.
+// writeHostManifest writes a native messaging host manifest. key is "allowed_origins" for Chromium
+// browsers and "allowed_extensions" for Firefox.
+func writeHostManifest(path, target, key string, allowed []string) error {
+	body, _ := json.MarshalIndent(map[string]any{
+		"name":        hostName,
+		"description": "Haul desktop helper",
+		"path":        target,
+		"type":        "stdio",
+		key:           allowed,
+	}, "", "  ")
+	return os.WriteFile(path, body, 0o644)
+}
+
 func installFFmpeg() error {
 	found := 0
 	for i, url := range ffmpegArchives {

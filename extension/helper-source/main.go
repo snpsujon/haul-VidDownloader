@@ -3,7 +3,7 @@
 // Double-click it to install (on macOS and Linux, install.sh runs it): it copies itself to
 // %LOCALAPPDATA%\Haul\helper (~/Library/Application Support/Haul/helper on macOS, ~/.config/Haul/helper
 // on Linux), downloads yt-dlp and FFmpeg, and registers itself as a native messaging host for Chrome,
-// Edge, Brave and Chromium.
+// Edge, Brave, Chromium and Firefox.
 // The browser then starts it with the extension's origin as the first argument and talks to it
 // over stdin/stdout.
 package main
@@ -12,11 +12,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
 const (
-	version  = "0.4.0"
+	version  = "0.5.0"
 	hostName = "app.haul.helper"
 )
 
@@ -25,6 +26,9 @@ var extensionIDs = []string{
 	"hnicogbjbfkjlkkeajepgjkkhojceeak", // Chrome Web Store
 	"pjolfkooklpnndljgomfbnnhigaoecoe", // unpacked copy loaded from the chrome folder (fixed by the manifest key)
 }
+
+// The Firefox add-on's ID (browser_specific_settings.gecko.id in the firefox folder's manifest).
+var firefoxIDs = []string{"haul@stackforge-pro.xyz"}
 
 // Paths under %LOCALAPPDATA%\Haul\helper, or the user config folder outside Windows.
 func baseDir() string {
@@ -57,8 +61,10 @@ func defaultFolder() string {
 
 func main() {
 	args := os.Args[1:]
+	// Chromium browsers start the helper with the extension's origin, Firefox with the path of the
+	// host manifest and then the add-on's ID.
 	for _, a := range args {
-		if strings.HasPrefix(a, "chrome-extension://") {
+		if strings.HasPrefix(a, "chrome-extension://") || slices.Contains(firefoxIDs, a) {
 			serve()
 			return
 		}

@@ -10,28 +10,38 @@ const ytdlpURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-d
 var ffmpegArchives = []string{"https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"}
 
 // Per-user registry keys each Chromium browser reads native messaging hosts from.
-var hostKeys = []string{
+var chromeHostKeys = []string{
 	`HKCU\Software\Google\Chrome\NativeMessagingHosts\`,
 	`HKCU\Software\Microsoft\Edge\NativeMessagingHosts\`,
 	`HKCU\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\`,
 	`HKCU\Software\Chromium\NativeMessagingHosts\`,
 }
 
+// Firefox reads its own key, which points at a manifest with allowed_extensions.
+const firefoxHostKey = `HKCU\Software\Mozilla\NativeMessagingHosts\`
+
 func exe(name string) string { return name + ".exe" }
 
-func registerHost(manifest string) error {
-	for _, k := range hostKeys {
-		c := exec.Command("reg", "add", k+hostName, "/ve", "/t", "REG_SZ", "/d", manifest, "/f")
-		hide(c)
-		if out, err := c.CombinedOutput(); err != nil {
-			return &regError{key: k, out: string(out), err: err}
+func registerHost(chromeManifest, firefoxManifest string) error {
+	for _, k := range chromeHostKeys {
+		if err := regAdd(k, chromeManifest); err != nil {
+			return err
 		}
+	}
+	return regAdd(firefoxHostKey, firefoxManifest)
+}
+
+func regAdd(key, manifest string) error {
+	c := exec.Command("reg", "add", key+hostName, "/ve", "/t", "REG_SZ", "/d", manifest, "/f")
+	hide(c)
+	if out, err := c.CombinedOutput(); err != nil {
+		return &regError{key: key, out: string(out), err: err}
 	}
 	return nil
 }
 
 func unregisterHost() {
-	for _, k := range hostKeys {
+	for _, k := range append(chromeHostKeys, firefoxHostKey) {
 		c := exec.Command("reg", "delete", k+hostName, "/f")
 		hide(c)
 		c.Run()

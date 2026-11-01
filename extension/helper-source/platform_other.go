@@ -56,24 +56,38 @@ func hostDirs() []string {
 	}
 }
 
-func registerHost(manifest string) error {
+// firefoxHostDir is where Firefox looks for the current user's native messaging hosts.
+func firefoxHostDir() string {
+	home, _ := os.UserHomeDir()
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Application Support", "Mozilla", "NativeMessagingHosts")
+	}
+	return filepath.Join(home, ".mozilla", "native-messaging-hosts")
+}
+
+func registerHost(chromeManifest, firefoxManifest string) error {
+	for _, d := range hostDirs() {
+		if err := copyManifest(chromeManifest, d); err != nil {
+			return err
+		}
+	}
+	return copyManifest(firefoxManifest, firefoxHostDir())
+}
+
+// copyManifest puts a host manifest in a browser's folder under the name the browser looks for.
+func copyManifest(manifest, dir string) error {
 	body, err := os.ReadFile(manifest)
 	if err != nil {
 		return err
 	}
-	for _, d := range hostDirs() {
-		if err := os.MkdirAll(d, 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(d, hostName+".json"), body, 0o644); err != nil {
-			return err
-		}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
 	}
-	return nil
+	return os.WriteFile(filepath.Join(dir, hostName+".json"), body, 0o644)
 }
 
 func unregisterHost() {
-	for _, d := range hostDirs() {
+	for _, d := range append(hostDirs(), firefoxHostDir()) {
 		os.Remove(filepath.Join(d, hostName+".json"))
 	}
 }

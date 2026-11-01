@@ -1,0 +1,87 @@
+{
+  "manifest_version": 3,
+  "name": "Haul - Universal Media Downloader",
+  "short_name": "Haul",
+  "version": "2.0.0",
+  "description": "Send the video you're watching to Haul on your phone, or save it on this computer.",
+  "action": {
+    "default_title": "Haul - Universal Media Downloader",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "scripts": [
+      "common.js",
+      "background.js"
+    ]
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "nativeMessaging",
+    "notifications",
+    "scripting",
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "commands": {
+    "download-video": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Download this page's video on this PC"
+    },
+    "download-audio": {
+      "suggested_key": {
+        "default": "Alt+Shift+M"
+      },
+      "description": "Download this page's audio on this PC"
+    },
+    "send-to-phone": {
+      "suggested_key": {
+        "default": "Alt+Shift+Q"
+      },
+      "description": "Send this page to your phone (QR code)"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://stackforge-pro.xyz/*",
+        "https://www.stackforge-pro.xyz/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "haul@stackforge-pro.xyz",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "browsingActivity",
+          "websiteContent"
+        ]
+      }
+    }
+  }
+}
