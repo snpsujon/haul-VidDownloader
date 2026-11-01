@@ -59,8 +59,9 @@ data class AppSettings(
     val pairings: List<Pairing> = emptyList(),
     /** "News from Haul": announcements from the website as notifications. */
     val newsEnabled: Boolean = true,
-    /** Highest news id seen; null until the first check. */
+    /** Highest news id seen from [lastNoticeSite]; null until the first check. */
     val lastNoticeId: Long? = null,
+    val lastNoticeSite: String? = null,
 ) {
     /** "1080p MP4" */
     val videoPresetLabel: String get() = "${videoHeight}p ${videoContainer.uppercase()}"
@@ -120,6 +121,7 @@ class SettingsRepository(private val context: Context) {
         val pairings = stringPreferencesKey("pairings")
         val newsEnabled = booleanPreferencesKey("news_enabled")
         val lastNoticeId = longPreferencesKey("last_notice_id")
+        val lastNoticeSite = stringPreferencesKey("last_notice_site")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -151,6 +153,7 @@ class SettingsRepository(private val context: Context) {
             pairings = Pairing.decode(p[K.pairings]),
             newsEnabled = p[K.newsEnabled] ?: true,
             lastNoticeId = p[K.lastNoticeId],
+            lastNoticeSite = p[K.lastNoticeSite],
         )
     }
 
@@ -184,7 +187,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppLastCheck(t: Long) = context.dataStore.edit { it[K.appLastCheck] = t }
     suspend fun setSkippedVersion(code: Int) = context.dataStore.edit { it[K.skippedVersion] = code }
     suspend fun setNewsEnabled(on: Boolean) = context.dataStore.edit { it[K.newsEnabled] = on }
-    suspend fun setLastNoticeId(id: Long) = context.dataStore.edit { it[K.lastNoticeId] = id }
+    suspend fun setLastNotice(site: String, id: Long) = context.dataStore.edit {
+        it[K.lastNoticeSite] = site
+        it[K.lastNoticeId] = id
+    }
     suspend fun updatePairings(change: (List<Pairing>) -> List<Pairing>) = context.dataStore.edit {
         it[K.pairings] = Pairing.encode(change(Pairing.decode(it[K.pairings])))
     }

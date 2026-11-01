@@ -63,4 +63,13 @@ class NoticeTest {
         assertTrue(none.isEmpty())
         assertEquals(0L, lastNone)
     }
+
+    @Test fun storedIdIsPerSite() {
+        val site = "https://stackforge-pro.xyz"
+        assertEquals(42L, Notice.lastIdFor(site, site, 42))
+        // An id stored against a test server must not hide real news.
+        assertNull(Notice.lastIdFor(site, "http://127.0.0.1:8787", 42))
+        assertNull(Notice.lastIdFor(site, null, 42))
+        assertNull(Notice.lastIdFor(site, site, null))
+    }
 }

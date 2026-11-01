@@ -77,6 +77,9 @@ data class Notice(
             return 0
         }
 
+        /** The stored id only counts for the site it came from; ids from another site (a test server) mean nothing here. */
+        fun lastIdFor(site: String, storedSite: String?, storedId: Long?): Long? = storedId?.takeIf { storedSite == site }
+
         /**
          * Which notices to show and the highest id to remember. On the first run ([lastId] null) only
          * the newest notice from the last 7 days is shown, so a new install isn't flooded.
@@ -103,13 +106,15 @@ class NoticePoller(private val context: Context, private val settings: SettingsR
     suspend fun poll() = lock.withLock {
         val s = settings.current()
         if (!s.newsEnabled || !configured) return@withLock
-        val url = "${BuildConfig.WEBSITE_URL}/api/notices?since=${s.lastNoticeId ?: 0}&v=${BuildConfig.VERSION_CODE}"
+        val site = BuildConfig.WEBSITE_URL
+        val lastId = Notice.lastIdFor(site, s.lastNoticeSite, s.lastNoticeId)
+        val url = "$site/api/notices?since=${lastId ?: 0}&v=${BuildConfig.VERSION_CODE}"
         // A missing endpoint or no connection is not worth bothering anyone about.
         val body = runCatching { fetch(url) }.onFailure { Log.d(TAG, "notices: ${it.message}") }.getOrNull() ?: return@withLock
         val items = runCatching { Notice.parse(body) }.getOrNull() ?: return@withLock
-        val (show, maxId) = Notice.select(items, s.lastNoticeId, BuildConfig.VERSION_CODE, System.currentTimeMillis() / 1000)
+        val (show, maxId) = Notice.select(items, lastId, BuildConfig.VERSION_CODE, System.currentTimeMillis() / 1000)
         show.forEach { Notifications.news(context, it) }
-        settings.setLastNoticeId(maxId)
+        settings.setLastNotice(site, maxId)
     }
 
     private suspend fun fetch(url: String): String? = withContext(Dispatchers.IO) {
