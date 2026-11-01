@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -15,6 +16,7 @@ import app.haul.MainActivity
 import app.haul.R
 import app.haul.data.DownloadEntity
 import app.haul.data.Status
+import app.haul.update.Notice
 import app.haul.util.Pretty
 
 /**
@@ -25,6 +27,7 @@ object Notifications {
     const val CHANNEL_PROGRESS = "downloads"
     const val CHANNEL_FINISHED = "finished"
     const val CHANNEL_UPDATES = "updates"
+    const val CHANNEL_NEWS = "news"
     const val ID_SERVICE = 1
     const val ID_APP_UPDATE = 2
     private const val SIGNAL = 0xFFFF7A3D.toInt()
@@ -41,6 +44,9 @@ object Notifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_UPDATES, context.getString(R.string.channel_updates), NotificationManager.IMPORTANCE_DEFAULT)
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_NEWS, context.getString(R.string.channel_news), NotificationManager.IMPORTANCE_DEFAULT)
         )
     }
 
@@ -139,6 +145,25 @@ object Notifications {
             .setAutoCancel(true)
             .build()
         runCatching { NotificationManagerCompat.from(context).notify(itemTag(id), 0, n) }
+    }
+
+    /** An announcement from the website. Tapping opens its link in the browser, or the app. */
+    fun news(context: Context, n: Notice) {
+        if (!canPost(context)) return
+        val tap = n.url?.let { Intent(Intent.ACTION_VIEW, Uri.parse(it)) }
+            ?: Intent(context, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+        val pi = PendingIntent.getActivity(
+            context, ("news" + n.id).hashCode(), tap.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val b = NotificationCompat.Builder(context, CHANNEL_NEWS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(SIGNAL)
+            .setContentTitle(n.title)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+        if (n.body.isNotEmpty()) b.setContentText(n.body).setStyle(NotificationCompat.BigTextStyle().bigText(n.body))
+        runCatching { NotificationManagerCompat.from(context).notify("notice-${n.id}", 0, b.build()) }
     }
 
     fun cancelItem(context: Context, id: Long) {

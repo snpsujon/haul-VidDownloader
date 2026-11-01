@@ -64,6 +64,7 @@ class AppUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWor
 object Schedules {
     fun schedule(context: Context) {
         PcInboxWorker.schedule(context)
+        NoticeWorker.schedule(context)
         val wm = WorkManager.getInstance(context)
         wm.enqueueUniquePeriodicWork(
             "engine-update",

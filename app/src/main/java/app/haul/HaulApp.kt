@@ -13,6 +13,7 @@ import app.haul.engine.MediaInfo
 import app.haul.engine.YtDlp
 import app.haul.share.PcInbox
 import app.haul.update.AppUpdater
+import app.haul.update.NoticePoller
 import app.haul.update.Schedules
 import app.haul.util.CrashReports
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,7 @@ class AppGraph(context: Context) {
     val queue = DownloadQueue(app, dao, settings, engine, storage, network, scope)
     val updater = AppUpdater(app)
     val pcInbox = PcInbox(app, settings, queue)
+    val notices = NoticePoller(app, settings)
 
     /** Link info read recently, so the share sheet and the app don't read the same link twice. */
     val infoCache = ConcurrentHashMap<String, MediaInfo>()

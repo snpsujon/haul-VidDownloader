@@ -126,6 +126,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setTheme(t: ThemeMode) = viewModelScope.launch { repo.setTheme(t) }
     fun setWallpaper(on: Boolean) = viewModelScope.launch { repo.setWallpaperColours(on) }
     fun setAppUpdateCheck(on: Boolean) = viewModelScope.launch { repo.setAppUpdateCheck(on) }
+    fun setNews(on: Boolean) = viewModelScope.launch { repo.setNewsEnabled(on) }
 
     var appChecking by mutableStateOf(false)
         private set

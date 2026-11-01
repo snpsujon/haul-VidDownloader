@@ -153,6 +153,10 @@ fun SettingsScreen(
                         { vm.setAppUpdateCheck(!s.appUpdateCheck) }, switch = s.appUpdateCheck,
                     )
                     SettingsRow(
+                        "News from Haul", "Occasional announcements from $site",
+                        { vm.setNews(!s.newsEnabled) }, switch = s.newsEnabled,
+                    )
+                    SettingsRow(
                         "Check now", if (vm.appChecking) "Checking…" else "Version ${BuildConfig.VERSION_NAME}",
                         { vm.checkApp { msg -> if (msg != null) snack.show(msg) } },
                     )

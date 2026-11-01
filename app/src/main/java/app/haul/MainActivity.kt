@@ -189,6 +189,11 @@ private fun App(s: AppSettings, pending: MutableStateFlow<Intent?>) {
         }
     }
 
+    // News from the website: once each time the app comes to the front.
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { g.notices.poll() }
+    }
+
     // Notifications, shares and the media session land here.
     val intent by pending.collectAsState()
     LaunchedEffect(intent) {

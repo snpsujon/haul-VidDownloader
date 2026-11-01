@@ -57,6 +57,10 @@ data class AppSettings(
     val signedInSites: Set<String> = emptySet(),
     /** Browsers paired for "send to phone". */
     val pairings: List<Pairing> = emptyList(),
+    /** "News from Haul": announcements from the website as notifications. */
+    val newsEnabled: Boolean = true,
+    /** Highest news id seen; null until the first check. */
+    val lastNoticeId: Long? = null,
 ) {
     /** "1080p MP4" */
     val videoPresetLabel: String get() = "${videoHeight}p ${videoContainer.uppercase()}"
@@ -114,6 +118,8 @@ class SettingsRepository(private val context: Context) {
         val subtitleMode = stringPreferencesKey("subtitle_mode")
         val signedInSites = stringSetPreferencesKey("signed_in_sites")
         val pairings = stringPreferencesKey("pairings")
+        val newsEnabled = booleanPreferencesKey("news_enabled")
+        val lastNoticeId = longPreferencesKey("last_notice_id")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -143,6 +149,8 @@ class SettingsRepository(private val context: Context) {
             subtitleMode = p[K.subtitleMode]?.let { runCatching { SubtitleMode.valueOf(it) }.getOrNull() } ?: SubtitleMode.EMBED,
             signedInSites = p[K.signedInSites] ?: emptySet(),
             pairings = Pairing.decode(p[K.pairings]),
+            newsEnabled = p[K.newsEnabled] ?: true,
+            lastNoticeId = p[K.lastNoticeId],
         )
     }
 
@@ -175,6 +183,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppUpdateCheck(on: Boolean) = context.dataStore.edit { it[K.appUpdateCheck] = on }
     suspend fun setAppLastCheck(t: Long) = context.dataStore.edit { it[K.appLastCheck] = t }
     suspend fun setSkippedVersion(code: Int) = context.dataStore.edit { it[K.skippedVersion] = code }
+    suspend fun setNewsEnabled(on: Boolean) = context.dataStore.edit { it[K.newsEnabled] = on }
+    suspend fun setLastNoticeId(id: Long) = context.dataStore.edit { it[K.lastNoticeId] = id }
     suspend fun updatePairings(change: (List<Pairing>) -> List<Pairing>) = context.dataStore.edit {
         it[K.pairings] = Pairing.encode(change(Pairing.decode(it[K.pairings])))
     }
