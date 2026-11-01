@@ -30,8 +30,8 @@ android {
         minSdk = 24
         targetSdk = 35
         // Release builds pass these from the git tag; see .github/workflows/build.yml.
-        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 200
+        versionName = (findProperty("versionName") as String?) ?: "0.2.0"
 
         buildConfigField("String", "UPDATE_URL", "\"$appSite/app/version.json\"")
         buildConfigField("String", "WEBSITE_URL", "\"$appSite\"")

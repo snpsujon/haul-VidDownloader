@@ -1,0 +1,3 @@
+- Trim: save only part of a video or song while downloading
+- Trim files already in your Library into a new copy
+- News from Haul: occasional announcements as notifications (can be turned off in Settings)
